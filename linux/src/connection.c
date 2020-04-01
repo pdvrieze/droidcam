@@ -55,16 +55,21 @@ int SendRecv(int doSend, char * buffer, int bytes, SOCKET s)
     while (bytes > 0) {
         retCode = (doSend) ? send(s, ptr, bytes, 0) : recv(s, ptr, bytes, 0);
         if (retCode <= 0 ){ // closed or error
-            goto _error_out;
+            return retCode;
         }
         ptr += retCode;
         bytes -= retCode;
     }
 
-    retCode = 1;
+    return 1;
+}
 
-_error_out:
-    return retCode;
+int sendToSocket(char * buffer, int bytes, SOCKET s) {
+	return SendRecv(1, buffer, bytes, s);
+}
+int recvFromSocket(char * buffer, int bytes, SOCKET s)
+{
+	return SendRecv(0, buffer, bytes, s);
 }
 
 static int StartInetServer(int port)

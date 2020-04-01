@@ -76,8 +76,10 @@ struct spx_decoder_s  spx_decoder;
 
 #define WEBCAM_Wf ((float)WEBCAM_W)
 #define WEBCAM_Hf ((float)WEBCAM_H)
-static int WEBCAM_W, WEBCAM_H;
+static unsigned int WEBCAM_W, WEBCAM_H;
 static int droidcam_device_fd;
+
+int droidcam_output_mode;
 
 #undef MAX_COMPONENTS
 #define MAX_COMPONENTS  4
@@ -186,11 +188,16 @@ static int find_droidcam_v4l(){
             close(droidcam_device_fd);
             continue;
         }
-        printf("Device: %s\n", v4l2cap.card);
-        if(0 == strncmp((const char*) v4l2cap.card, "Droidcam", 8)) {
-            printf("Found driver: %s (fd:%d)\n", device, droidcam_device_fd);
+        printf("Device (driver: %s): %s\n", v4l2cap.driver, v4l2cap.card);
+        if(0 == strncmp((const char*) v4l2cap.driver, "Droidcam", 8)) {
+            printf("Found device: %s (fd:%d)\n", device, droidcam_device_fd);
+            droidcam_output_mode = 1;
             return 1;
-        }
+        } else if(0 == strncmp((const char*) v4l2cap.driver, "v4l2 loopback", 8)) {
+		    printf("Found device: %s (fd:%d)\n", device, droidcam_device_fd);
+		    droidcam_output_mode = 2;
+		    return 2;
+	    }
         close(droidcam_device_fd); // not DroidCam .. keep going
         continue;
     }
@@ -238,17 +245,53 @@ void decoder_set_video_delay(unsigned v) {
     dbgprint("buffer %d frames\n", jpg_decoder.m_BufferLimit);
 }
 
+int loopback_init(unsigned int width, unsigned int height) {
+	WEBCAM_W = width;
+	WEBCAM_H = height;
+	jpg_decoder.m_webcamYuvSize  = width * height * 3 / 2;
+	jpg_decoder.m_webcam_ySize   = width * height;
+	jpg_decoder.m_webcam_uvSize  = jpg_decoder.m_webcam_ySize / 4;
+
+	struct v4l2_format vid_format = {0};
+	vid_format.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	vid_format.fmt.pix.width = width;
+	vid_format.fmt.pix.height = height;
+	vid_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUV420;
+//	vid_format.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
+	vid_format.fmt.pix.field = V4L2_FIELD_TOP;
+	vid_format.fmt.pix.colorspace = V4L2_COLORSPACE_JPEG;
+	if (xioctl(droidcam_device_fd, VIDIOC_S_FMT, &vid_format) < 0) {
+		int e = errno;
+		fprintf(stderr, "Fatal: Unable to set droidcam video device. errno=%d, msg=%s\n", e, strerror(e));
+		return 0;
+	}
+
+	dbgprint("  vid_format->type                =%d\n", vid_format.type );
+	dbgprint("  vid_format->fmt.pix.width       =%d\n", vid_format.fmt.pix.width );
+	dbgprint("  vid_format->fmt.pix.height      =%d\n", vid_format.fmt.pix.height );
+	dbgprint("  vid_format->fmt.pix.pixelformat =%d\n", vid_format.fmt.pix.pixelformat);
+	dbgprint("  vid_format->fmt.pix.sizeimage   =%d\n", vid_format.fmt.pix.sizeimage );
+	dbgprint("  vid_format->fmt.pix.field       =%d\n", vid_format.fmt.pix.field );
+	dbgprint("  vid_format->fmt.pix.bytesperline=%d\n", vid_format.fmt.pix.bytesperline );
+	dbgprint("  vid_format->fmt.pix.colorspace  =%d\n", vid_format.fmt.pix.colorspace );
+	return 1;
+}
+
 int decoder_init(void) {
     WEBCAM_W = 0;
     WEBCAM_H = 0;
 
+    find_droidcam_v4l();
+
     if (!find_droidcam_v4l())
         return 0;
-    query_droidcam_v4l();
-    dbgprint("WEBCAM_W=%d, WEBCAM_H=%d\n", WEBCAM_W, WEBCAM_H);
-    if (WEBCAM_W < 2 || WEBCAM_H < 2 || WEBCAM_W > 9999 || WEBCAM_H > 9999){
-        MSG_ERROR("Unable to query droidcam device for parameters");
-        return 0;
+    if (droidcam_output_mode == 1) { // droidcam mode
+	    query_droidcam_v4l();
+	    dbgprint("WEBCAM_W=%d, WEBCAM_H=%d\n", WEBCAM_W, WEBCAM_H);
+	    if (WEBCAM_W < 2 || WEBCAM_H < 2 || WEBCAM_W > 9999 || WEBCAM_H > 9999){
+	        MSG_ERROR("Unable to query droidcam device for parameters");
+	        return 0;
+	    }
     }
 
     fatal_error = 0;
@@ -257,6 +300,14 @@ int decoder_init(void) {
     jpg_decoder.jerr.output_message = joutput_message;
     jpg_decoder.jerr.error_exit = jerror_exit;
     jpeg_create_decompress(&jpg_decoder.dinfo);
+    if (droidcam_output_mode == 2) {
+	    WEBCAM_W = jpg_decoder.dinfo.image_width;
+	    WEBCAM_H = jpg_decoder.dinfo.image_height;
+	    dbgprint("WEBCAM_W=%d, WEBCAM_H=%d\n", WEBCAM_W, WEBCAM_H);
+//	    if (WEBCAM_W==0 || WEBCAM_H==0) {
+//	    	return 0; // no image
+//	    }
+    }
     if (fatal_error) return 0;
     jpg_decoder.init = 1;
     jpg_decoder.subsamp = TJSAMP_NIL;
@@ -293,7 +344,7 @@ void decoder_fini() {
     }
 }
 
-int decoder_prepare_video(char * header) {
+int decoder_prepare_video(unsigned char * header) {
     int i;
     make_int(jpg_decoder.m_width,  header[0], header[1]);
     make_int(jpg_decoder.m_height, header[2], header[3]);
@@ -599,10 +650,17 @@ static void decoder_share_frame() {
 }
 
 void decoder_show_test_image() {
+
     int i,j;
-    int m_height = WEBCAM_H * 2;
-    int m_width  = WEBCAM_W * 2;
-    char header[8];
+    if (droidcam_output_mode==2) {
+    	WEBCAM_H = 480;
+    	WEBCAM_W = 640;
+	    if(!loopback_init(WEBCAM_W, WEBCAM_H)) return;
+    }
+
+    unsigned int m_height = WEBCAM_H * 2;
+    unsigned int m_width  = WEBCAM_W * 2;
+    uint8_t header[8];
 
     header[0] = ( m_width >> 8  ) & 0xFF;
     header[1] = ( m_width >> 0  ) & 0xFF;

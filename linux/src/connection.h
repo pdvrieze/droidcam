@@ -18,6 +18,9 @@ void disconnect(SOCKET s);
 
 SOCKET accept_connection(int port);
 
-int SendRecv(int doSend, char * buffer, int bytes, SOCKET s);
+//int SendRecv(int doSend, char * buffer, int bytes, SOCKET s);
+
+int sendToSocket(char * buffer, int bytes, SOCKET s);
+int recvFromSocket(char * buffer, int bytes, SOCKET s);
 
 #endif

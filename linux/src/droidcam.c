@@ -31,6 +31,8 @@ enum callbacks {
 	CB_WIFI_SRVR,
 	CB_AUDIO,
 	CB_BTN_OTR,
+	CB_MODE_IPCAM,
+	CB_MODE_DROIDCAM
 };
 
 enum control_code {
@@ -40,6 +42,11 @@ enum control_code {
 	CB_CONTROL_LED, // 9
 };
 
+enum input_mode {
+	IM_DROIDCAM = 0,
+	IM_IPCAM
+};
+
 struct settings {
 	GtkEntry *ipEntry;
 	GtkEntry *portEntry;
@@ -47,6 +54,7 @@ struct settings {
 	char connection; // Connection type
 	char mirror;
 	char audio;
+	enum input_mode inputMode;
 };
 
 /* Globals */
@@ -192,16 +200,23 @@ void *VideoThreadProc(void *args)
 		keep_waiting = 1;
 	}
 
-	{
-		int len = snprintf(buf, sizeof(buf), VIDEO_REQ, decoder_get_video_width(), decoder_get_video_height());
-		if (SendRecv(1, buf, len, videoSocket) <= 0) {
-			MSG_ERROR("Error sending request, DroidCam might be busy with another client.");
-			goto early_out;
-		}
+	if (droidcam_output_mode==2) {
+		loopback_init(1280, 720);
+
+	} else if (droidcam_output_mode!=1){
+		MSG_ERROR("Droidcam not in proper output mode");
+		goto early_out;
 	}
 
+	int len = snprintf(buf, sizeof(buf), VIDEO_REQ, decoder_get_video_width(), decoder_get_video_height());
+	if (sendToSocket(buf, len, videoSocket) <= 0) {
+		MSG_ERROR("Error sending request, DroidCam might be busy with another client.");
+		goto early_out;
+	}
+
+
 	memset(buf, 0, sizeof(buf));
-	if (SendRecv(0, buf, 5, videoSocket) <= 0) {
+	if (recvFromSocket(buf, 5, videoSocket) <= 0) {
 		MSG_ERROR("Connection reset by app!\nDroidCam is probably busy with another client");
 		goto early_out;
 	}
@@ -213,22 +228,22 @@ void *VideoThreadProc(void *args)
 	while (v_running != 0) {
 		if (thread_cmd != 0) {
 			int len = sprintf(buf, OTHER_REQ, thread_cmd);
-			SendRecv(1, buf, len, videoSocket);
+			sendToSocket(buf, len, videoSocket);
 			thread_cmd = 0;
 		}
 
 		int frameLen;
 		struct jpg_frame_s *f = decoder_get_next_frame();
-		if (SendRecv(0, buf, 4, videoSocket) == FALSE) break;
+		if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
 		make_int4(frameLen, buf[0], buf[1], buf[2], buf[3]);
 		f->length = frameLen;
 		char *p = (char *) f->data;
 		while (frameLen > 4096) {
-			if (SendRecv(0, p, 4096, videoSocket) == FALSE) goto early_out;
+			if (recvFromSocket(p, 4096, videoSocket) == FALSE) goto early_out;
 			frameLen -= 4096;
 			p += 4096;
 		}
-		if (SendRecv(0, p, frameLen, videoSocket) == FALSE) break;
+		if (recvFromSocket(p, frameLen, videoSocket) == FALSE) break;
 	}
 
 	early_out:
@@ -288,6 +303,50 @@ accel_callback(GtkAccelGroup *group,
 	return TRUE;
 }
 
+static void doConnect() {
+#if 1
+	char *ip = NULL;
+	SOCKET s = INVALID_SOCKET;
+	int port = atoi(gtk_entry_get_text(g_settings.portEntry));
+	LoadSaveSettings(0); // Save
+
+	if (g_settings.connection == CB_RADIO_ADB) {
+		if (CheckAdbDevices(port) != 8) return;
+		ip = "127.0.0.1";
+	} else if (g_settings.connection == CB_RADIO_WIFI && wifi_srvr_mode == 0) {
+		ip = (char *) gtk_entry_get_text(g_settings.ipEntry);
+	}
+
+	if (ip != NULL) // Not Bluetooth or "Server Mode", so connect first
+	{
+		if (strlen(ip) < 7 || port < 1024) {
+			MSG_ERROR("You must enter the correct IP address (and port) to connect to.");
+			return;
+		}
+		gtk_button_set_label(g_settings.button, "Please wait");
+		s = connect_droidcam(ip, port);
+
+		if (s == INVALID_SOCKET) {
+			dbgprint("failed");
+			gtk_button_set_label(g_settings.button, "Connect");
+			return;
+		}
+	}
+
+	hVideoThread = g_thread_create(VideoThreadProc, (void *) s, TRUE, NULL);
+	gtk_button_set_label(g_settings.button, "Stop");
+	//gtk_widget_set_sensitive(GTK_WIDGET(g_settings.button), FALSE);
+
+	gtk_widget_set_sensitive(GTK_WIDGET(g_settings.ipEntry), FALSE);
+	gtk_widget_set_sensitive(GTK_WIDGET(g_settings.portEntry), FALSE);
+#else
+	decoder_show_test_image();
+#endif
+}
+
+static void doDisconnect() {
+	StopVideo();
+}
 
 static void the_callback(GtkWidget *widget, gpointer extra)
 {
@@ -301,49 +360,11 @@ static void the_callback(GtkWidget *widget, gpointer extra)
 	switch (cb) {
 		case CB_BUTTON:
 			if (v_running) {
-				StopVideo();
+				doDisconnect();
 				cb = (int) g_settings.connection;
 				goto _up;
-			} else // START
-			{
-#if 1
-				char *ip = NULL;
-				SOCKET s = INVALID_SOCKET;
-				int port = atoi(gtk_entry_get_text(g_settings.portEntry));
-				LoadSaveSettings(0); // Save
-
-				if (g_settings.connection == CB_RADIO_ADB) {
-					if (CheckAdbDevices(port) != 8) return;
-					ip = "127.0.0.1";
-				} else if (g_settings.connection == CB_RADIO_WIFI && wifi_srvr_mode == 0) {
-					ip = (char *) gtk_entry_get_text(g_settings.ipEntry);
-				}
-
-				if (ip != NULL) // Not Bluetooth or "Server Mode", so connect first
-				{
-					if (strlen(ip) < 7 || port < 1024) {
-						MSG_ERROR("You must enter the correct IP address (and port) to connect to.");
-						break;
-					}
-					gtk_button_set_label(g_settings.button, "Please wait");
-					s = connect_droidcam(ip, port);
-
-					if (s == INVALID_SOCKET) {
-						dbgprint("failed");
-						gtk_button_set_label(g_settings.button, "Connect");
-						break;
-					}
-				}
-
-				hVideoThread = g_thread_create(VideoThreadProc, (void *) s, TRUE, NULL);
-				gtk_button_set_label(g_settings.button, "Stop");
-				//gtk_widget_set_sensitive(GTK_WIDGET(g_settings.button), FALSE);
-
-				gtk_widget_set_sensitive(GTK_WIDGET(g_settings.ipEntry), FALSE);
-				gtk_widget_set_sensitive(GTK_WIDGET(g_settings.portEntry), FALSE);
-#else
-				decoder_show_test_image();
-#endif
+			} else {// START
+				doConnect();
 			}
 			break;
 		case CB_WIFI_SRVR:
@@ -384,6 +405,12 @@ static void the_callback(GtkWidget *widget, gpointer extra)
 			break;
 		case CB_AUDIO:
 			g_settings.audio = !g_settings.audio;
+			break;
+		case CB_MODE_DROIDCAM:
+			g_settings.inputMode = IM_DROIDCAM;
+			break;
+		case CB_MODE_IPCAM:
+			g_settings.inputMode = IM_DROIDCAM;
 			break;
 	}
 
@@ -470,12 +497,14 @@ int main(int argc, char *argv[])
 	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(widget), TRUE);
 	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer) CB_RADIO_WIFI);
 	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+
 	widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "Wifi Server Mode");
 	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer) CB_WIFI_SRVR);
 	// gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
 	// widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "Bluetooth");
 	// g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_RADIO_BTH);
 	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+
 	widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "USB (over adb)");
 	g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer) CB_RADIO_ADB);
 	gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);

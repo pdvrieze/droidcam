@@ -17,10 +17,11 @@ struct jpg_frame_s {
  unsigned length;
 };
 
+int loopback_init(unsigned int width, unsigned int height);
 int  decoder_init();
 void decoder_fini();
 
-int  decoder_prepare_video(char * header);
+int  decoder_prepare_video(unsigned char * header);
 void decoder_cleanup();
 
 struct jpg_frame_s* decoder_get_next_frame();
@@ -29,6 +30,8 @@ int decoder_get_video_width();
 int decoder_get_video_height();
 void decoder_rotate();
 void decoder_show_test_image();
+
+int droidcam_output_mode;
 
 /* 20ms 16hkz 16 bit */
 #define DROIDCAM_CHUNK_MS_2           20
