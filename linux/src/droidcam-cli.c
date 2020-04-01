@@ -18,6 +18,7 @@
 #include "common.h"
 #include "connection.h"
 #include "decoder.h"
+#include "context.h"
 
 char *g_ip;
 int g_port;
@@ -27,7 +28,8 @@ void ShowError(const char * title, const char * msg) {
     errprint("%s: %s\n", title, msg);
 }
 
-void stream_video(void) {
+void stream_video(Settings *settings)
+{
     char buf[32];
     int keep_waiting = 0;
     SOCKET videoSocket = INVALID_SOCKET;
@@ -42,21 +44,21 @@ void stream_video(void) {
 
 server_wait:
     if (videoSocket == INVALID_SOCKET) {
-        videoSocket = accept_connection(g_port);
+        videoSocket = accept_connection(g_port, settings->running);
         if (videoSocket == INVALID_SOCKET) { goto early_out; }
         keep_waiting = 1;
     }
 
     {
         int len = snprintf(buf, sizeof(buf), VIDEO_REQ, decoder_get_video_width(), decoder_get_video_height());
-        if (SendRecv(1, buf, len, videoSocket) <= 0){
+        if (sendToSocket(buf, len, videoSocket) <= 0){
             MSG_ERROR("Error sending request, DroidCam might be busy with another client.");
             goto early_out;
         }
     }
 
     memset(buf, 0, sizeof(buf));
-    if (SendRecv(0, buf, 5, videoSocket) <= 0 ){
+    if (recvFromSocket(buf, 5, videoSocket) <= 0 ){
         MSG_ERROR("Connection reset by app!\nDroidCam is probably busy with another client");
         goto early_out;
     }
@@ -68,16 +70,16 @@ server_wait:
     while (1){
         int frameLen;
         struct jpg_frame_s *f = decoder_get_next_frame();
-        if (SendRecv(0, buf, 4, videoSocket) == FALSE) break;
+        if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
         make_int4(frameLen, buf[0], buf[1], buf[2], buf[3]);
         f->length = frameLen;
         char *p = (char*)f->data;
         while (frameLen > 4096) {
-            if (SendRecv(0, p, 4096, videoSocket) == FALSE) goto early_out;
+            if (recvFromSocket(p, 4096, videoSocket) == FALSE) goto early_out;
             frameLen -= 4096;
             p += 4096;
         }
-        if (SendRecv(0, p, frameLen, videoSocket) == FALSE) break;
+        if (recvFromSocket(p, frameLen, videoSocket) == FALSE) break;
     }
 
 early_out:
@@ -120,10 +122,13 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (!decoder_init()) {
+    Settings settings;
+    int outputMode;
+
+    if (!decoder_init(&outputMode)) {
         return 2;
     }
-    stream_video();
+    stream_video(&settings);
     decoder_fini();
     return 0;
 }

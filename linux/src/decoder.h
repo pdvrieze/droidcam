@@ -10,6 +10,8 @@
 #ifndef __DECODR_H__
 #define __DECODR_H__
 
+#include "context.h"
+
 typedef unsigned char BYTE;
 
 struct jpg_frame_s {
@@ -18,7 +20,7 @@ struct jpg_frame_s {
 };
 
 int loopback_init(unsigned int width, unsigned int height);
-int  decoder_init();
+int  decoder_init(OutputMode *droidcam_output_mode);
 void decoder_fini();
 
 int  decoder_prepare_video(unsigned char * header);
@@ -29,9 +31,9 @@ void decoder_set_video_delay(unsigned v);
 int decoder_get_video_width();
 int decoder_get_video_height();
 void decoder_rotate();
-void decoder_show_test_image();
+void decoder_show_test_image(int *droidcam_output_mode);
 
-int droidcam_output_mode;
+int x_droidcam_output_mode;
 
 /* 20ms 16hkz 16 bit */
 #define DROIDCAM_CHUNK_MS_2           20

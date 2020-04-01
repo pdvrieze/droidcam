@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.15)
 project(droidcam)
 set(COMMON_SOURCE src/connection.c src/decoder.c)
 set(CMAKE_C_FLAGS_RELEASE "-march=native -mtune=native -O2 -Wall")
+set(CMAKE_C_STANDARD 11)
 
 include(FindPkgConfig)
 
@@ -17,7 +18,7 @@ pkg_check_modules(GTK2 REQUIRED gtk+-2.0)
 pkg_check_modules(GTHREAD2 REQUIRED gthread-2.0)
 
 
-add_executable(droidcam ${COMMON_SOURCE} src/droidcam.c)
+add_executable(droidcam ${COMMON_SOURCE} src/droidcam.c src/context.h src/ipcam.h src/ipcam.c)
 add_executable(droidcam-cli ${COMMON_SOURCE} src/droidcam-cli.c)
 
 include_directories(${SWSCALE_INCLUDE_DIRS})

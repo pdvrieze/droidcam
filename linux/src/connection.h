@@ -16,7 +16,7 @@ SOCKET connect_droidcam(char * ip, int port);
 void connection_cleanup();
 void disconnect(SOCKET s);
 
-SOCKET accept_connection(int port);
+SOCKET accept_connection(int port, int *running);
 
 //int SendRecv(int doSend, char * buffer, int bytes, SOCKET s);
 

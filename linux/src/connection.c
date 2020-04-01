@@ -20,7 +20,6 @@
 #include "connection.h"
 
 SOCKET wifiServerSocket = INVALID_SOCKET;
-extern int v_running;
 
 SOCKET connect_droidcam(char * ip, int port)
 {
@@ -130,7 +129,7 @@ void disconnect(SOCKET s) {
     close(s);
 }
 
-SOCKET accept_connection(int port)
+SOCKET accept_connection(int port, int *running)
 {
     int flags;
     SOCKET client =  INVALID_SOCKET;
@@ -140,7 +139,7 @@ SOCKET accept_connection(int port)
         goto _error_out;
 
     errprint("waiting on port %d..", port);
-    while(v_running && (client = accept(wifiServerSocket, NULL, NULL)) == INVALID_SOCKET)
+    while(*running && (client = accept(wifiServerSocket, NULL, NULL)) == INVALID_SOCKET)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR){
             usleep(50000);

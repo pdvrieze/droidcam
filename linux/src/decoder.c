@@ -30,6 +30,7 @@
 
 #include "common.h"
 #include "decoder.h"
+#include "context.h"
 
 struct spx_decoder_s {
  void *state;
@@ -79,7 +80,7 @@ struct spx_decoder_s  spx_decoder;
 static unsigned int WEBCAM_W, WEBCAM_H;
 static int droidcam_device_fd;
 
-int droidcam_output_mode;
+int x_droidcam_output_mode;
 
 #undef MAX_COMPONENTS
 #define MAX_COMPONENTS  4
@@ -191,15 +192,12 @@ static int find_droidcam_v4l(){
         printf("Device (driver: %s): %s\n", v4l2cap.driver, v4l2cap.card);
         if(0 == strncmp((const char*) v4l2cap.driver, "Droidcam", 8)) {
             printf("Found device: %s (fd:%d)\n", device, droidcam_device_fd);
-            droidcam_output_mode = 1;
             return 1;
         } else if(0 == strncmp((const char*) v4l2cap.driver, "v4l2 loopback", 8)) {
 		    printf("Found device: %s (fd:%d)\n", device, droidcam_device_fd);
-		    droidcam_output_mode = 2;
 		    return 2;
 	    }
-        close(droidcam_device_fd); // not DroidCam .. keep going
-        continue;
+        close(droidcam_device_fd);
     }
     MSG_ERROR("Device not found (/dev/video[0-9]).\nDid you install it?\n");
     return 0;
@@ -277,15 +275,15 @@ int loopback_init(unsigned int width, unsigned int height) {
 	return 1;
 }
 
-int decoder_init(void) {
+int decoder_init(OutputMode *droidcam_output_mode) {
     WEBCAM_W = 0;
     WEBCAM_H = 0;
 
-    find_droidcam_v4l();
+	(*droidcam_output_mode) = find_droidcam_v4l();
 
-    if (!find_droidcam_v4l())
+    if (!(*droidcam_output_mode))
         return 0;
-    if (droidcam_output_mode == 1) { // droidcam mode
+    if ((*droidcam_output_mode) == 1) { // droidcam mode
 	    query_droidcam_v4l();
 	    dbgprint("WEBCAM_W=%d, WEBCAM_H=%d\n", WEBCAM_W, WEBCAM_H);
 	    if (WEBCAM_W < 2 || WEBCAM_H < 2 || WEBCAM_W > 9999 || WEBCAM_H > 9999){
@@ -300,7 +298,7 @@ int decoder_init(void) {
     jpg_decoder.jerr.output_message = joutput_message;
     jpg_decoder.jerr.error_exit = jerror_exit;
     jpeg_create_decompress(&jpg_decoder.dinfo);
-    if (droidcam_output_mode == 2) {
+    if ((*droidcam_output_mode) == 2) {
 	    WEBCAM_W = jpg_decoder.dinfo.image_width;
 	    WEBCAM_H = jpg_decoder.dinfo.image_height;
 	    dbgprint("WEBCAM_W=%d, WEBCAM_H=%d\n", WEBCAM_W, WEBCAM_H);
@@ -649,10 +647,10 @@ static void decoder_share_frame() {
     write(droidcam_device_fd, p, jpg_decoder.m_webcamYuvSize);
 }
 
-void decoder_show_test_image() {
+void decoder_show_test_image(int *droidcam_output_mode) {
 
     int i,j;
-    if (droidcam_output_mode==2) {
+    if (*droidcam_output_mode==2) {
     	WEBCAM_H = 480;
     	WEBCAM_W = 640;
 	    if(!loopback_init(WEBCAM_W, WEBCAM_H)) return;
