@@ -381,7 +381,7 @@ static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 	switch (cb) {
 		case CB_BUTTON:
 			if (context->running) {
-				doDisconnect(NULL);
+				doDisconnect(context);
 				cb = (int) context->settings->connection;
 				goto _up;
 			} else {// START
