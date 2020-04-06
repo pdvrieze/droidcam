@@ -13,7 +13,6 @@
 #include <linux/limits.h>
 #include <sys/stat.h>
 #include <gtk/gtk.h>
-#include <curl/curl.h>
 #include <errno.h>
 
 #include "common.h"
@@ -115,8 +114,8 @@ static void loadSettings(DCContext *context)
 	context->settings.port = 4747;
 
 	dbgprint("set defaults...");
-	gtk_entry_set_text(context->ipEntry, "");
-	gtk_entry_set_text(context->portEntry, "4747");
+	gtk_entry_set_text(GTK_ENTRY(context->ipEntry), "");
+	gtk_entry_set_text(GTK_ENTRY(context->portEntry), "4747");
 
 
 	snprintf(buf, sizeof(buf), "%s/.droidcam", getenv("HOME"));
@@ -150,7 +149,7 @@ static void loadSettings(DCContext *context)
 			buf[strlen(buf) - 1] = '\0';
 		}
 
-		if (version == 2 && fgets(buf, sizeof(buf), fp)) {
+		if (fgets(buf, sizeof(buf), fp)) {
 			buf[strlen(buf) - 1] = '\0';
 			if (strcmp(buf, "ipcam") == 0) {
 				context->settings.inputMode = IM_IPCAM;
@@ -158,11 +157,15 @@ static void loadSettings(DCContext *context)
 		}
 	}
 
-	gtk_entry_set_text(context->ipEntry, context->settings.hostName);
+	if(context->settings.inputMode==IM_IPCAM) {
+		gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(context->mode_ipcam),TRUE);
+	}
+
+	gtk_entry_set_text(GTK_ENTRY(context->ipEntry), context->settings.hostName);
 	char portText[8];
 	memset(portText, 0, 8);
 	snprintf(portText, 7, "%d", context->settings.port);
-	gtk_entry_set_text(context->portEntry, portText);
+	gtk_entry_set_text(GTK_ENTRY(context->portEntry), portText);
 
 	fclose(fp);
 }
@@ -170,13 +173,13 @@ static void loadSettings(DCContext *context)
 static void updateSettingsFromContext(DCContext *context) {
 	Settings *settings = &(context->settings);
 	char *end;
-	const gchar *entryText = gtk_entry_get_text(context->portEntry);
+	const gchar *entryText = gtk_entry_get_text(GTK_ENTRY(context->portEntry));
 	unsigned int portNo = strtol(entryText, &end, 10);
 	if (end != entryText && *end == '\0' && errno != ERANGE) {
 		settings->port = portNo;
 	}
 
-	const gchar *host = gtk_entry_get_text(context->ipEntry);
+	const gchar *host = gtk_entry_get_text(GTK_ENTRY(context->ipEntry));
 
 	if (settings->hostName == NULL ||
 	    strcmp(host, settings->hostName)!=0) {
@@ -210,8 +213,8 @@ static void saveSettings(Settings *settings)
 
 
 		fprintf(fp, "v1\n%s\n%s\n%s\n",
-		        gtk_entry_get_text(settings->hostName),
-		        gtk_entry_get_text(portText),
+		        settings->hostName,
+		        portText,
 		        settings->inputMode == IM_IPCAM ? "ipcam" : "droidcam");
 	}
 	fclose(fp);
@@ -373,13 +376,13 @@ static void doConnect(DCContext *context)
 			MSG_ERROR("You must enter the correct IP address (and port) to connect to.");
 			return;
 		}
-		gtk_button_set_label(context->button, "Please wait");
+		gtk_button_set_label(GTK_BUTTON(context->button), "Please wait");
 		if (settings->inputMode == IM_DROIDCAM) {
 			droidcam_socket = connect_droidcam(ip, settings->port);
 
 			if (droidcam_socket == INVALID_SOCKET) {
 				dbgprint("failed");
-				gtk_button_set_label(context->button, "Connect");
+				gtk_button_set_label(GTK_BUTTON(context->button), "Connect");
 				return;
 			}
 		}
@@ -414,7 +417,7 @@ static void doDisconnect(DCContext *context)
 
 static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 {
-	int cb = (int) callbackContext->cb;
+	Callbacks cb = callbackContext->cb;
 	DCContext *context = callbackContext->context;
 	gboolean ipEdit = TRUE;
 	gboolean portEdit = TRUE;
@@ -474,25 +477,34 @@ static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 			break;
 		}
 		case CB_MODE_DROIDCAM:
-			context->settings.inputMode = IM_DROIDCAM;
+			if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))) {
+				context->settings.inputMode = IM_DROIDCAM;
+			}
 			break;
 		case CB_MODE_IPCAM:
-			context->settings.inputMode = IM_IPCAM;
+			if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(widget))) {
+				context->settings.inputMode = IM_IPCAM;
+			}
+			break;
+		case CB_QUIT:
+			updateSettingsFromContext(context);
+			saveSettings(&context->settings);
+			gtk_main_quit();
 			break;
 	}
 
 	if(context->settings.inputMode == IM_DROIDCAM) {
-		gtk_widget_set_sensitive(GTK_WIDGET(context->radioServer), TRUE);
+		gtk_widget_set_sensitive(context->radioServer, TRUE);
 	} else {
 		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(context->radioServer))) {
 			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context->radioServer), FALSE);
 			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context->radioClient), TRUE);
 		}
-		gtk_widget_set_sensitive(GTK_WIDGET(context->radioServer), FALSE);
+		gtk_widget_set_sensitive(context->radioServer, FALSE);
 	}
 
 	if (text != NULL && context->running == 0) {
-		gtk_button_set_label(context->button, text);
+		gtk_button_set_label(GTK_BUTTON(context->button), text);
 		gtk_widget_set_sensitive(GTK_WIDGET(context->ipEntry), ipEdit);
 		gtk_widget_set_sensitive(GTK_WIDGET(context->portEntry), portEdit);
 	}
@@ -522,8 +534,8 @@ int main(int argc, char *argv[])
 		GtkWidget *window;
 		GtkWidget *hbox, *hbox2, *hbox3;
 		GtkWidget *vbox, *vbox2;
-		GtkWidget *widget; // generic stuff
-		GtkWidget *mode_ipcam, *mode_droidcam;
+//		GtkWidget *widget; // generic stuff
+//		GtkWidget *mode_ipcam, *mode_droidcam;
 
 		// init threads
 		g_thread_init(NULL);
@@ -557,30 +569,40 @@ int main(int argc, char *argv[])
 		}
 		menu = gtk_menu_new();
 
-		widget = gtk_menu_item_new_with_label("DroidCamX Commands:");
-		gtk_menu_append (GTK_MENU(menu), widget);
-		gtk_widget_show(widget);
-		gtk_widget_set_sensitive(widget, 0);
+		{
+			GtkWidget *widget = gtk_menu_item_new_with_label("DroidCamX Commands:");
+			gtk_menu_append (GTK_MENU(menu), widget);
+			gtk_widget_show(widget);
+			gtk_widget_set_sensitive(widget, 0);
+		}
 
-		widget = gtk_menu_item_new_with_label("Auto-Focus (Ctrl+A)");
-		gtk_menu_append (GTK_MENU(menu), widget);
-		gtk_widget_show(widget);
-		g_signal_connect(widget, "activate", G_CALLBACK(the_callback), cbContext(&context, CB_CONTROL_AF));
+		{
+			GtkWidget *widget = gtk_menu_item_new_with_label("Auto-Focus (Ctrl+A)");
+			gtk_menu_append (GTK_MENU(menu), widget);
+			gtk_widget_show(widget);
+			g_signal_connect(widget, "activate", G_CALLBACK(the_callback), cbContext(&context, CB_CONTROL_AF));
+		}
 
-		widget = gtk_menu_item_new_with_label("Toggle LED Flash (Ctrl+L)");
-		gtk_menu_append (GTK_MENU(menu), widget);
-		gtk_widget_show(widget);
-		g_signal_connect(widget, "activate", G_CALLBACK(the_callback), cbContext(&context, CB_CONTROL_LED));
+		{
+			GtkWidget *widget = gtk_menu_item_new_with_label("Toggle LED Flash (Ctrl+L)");
+			gtk_menu_append (GTK_MENU(menu), widget);
+			gtk_widget_show(widget);
+			g_signal_connect(widget, "activate", G_CALLBACK(the_callback), cbContext(&context, CB_CONTROL_LED));
+		}
 
-		widget = gtk_menu_item_new_with_label("Zoom In (+)");
-		gtk_menu_append (GTK_MENU(menu), widget);
-		gtk_widget_show(widget);
-		g_signal_connect(widget, "activate", G_CALLBACK(the_callback), cbContext(&context, CB_CONTROL_ZIN));
+		{
+			GtkWidget *widget = gtk_menu_item_new_with_label("Zoom In (+)");
+			gtk_menu_append (GTK_MENU(menu), widget);
+			gtk_widget_show(widget);
+			g_signal_connect(widget, "activate", G_CALLBACK(the_callback), cbContext(&context, CB_CONTROL_ZIN));
+		}
 
-		widget = gtk_menu_item_new_with_label("Zoom Out (-)");
-		gtk_menu_append (GTK_MENU(menu), widget);
-		gtk_widget_show(widget);
-		g_signal_connect(widget, "activate", G_CALLBACK(the_callback), cbContext(&context, CB_CONTROL_ZOUT));
+		{
+			GtkWidget *widget = gtk_menu_item_new_with_label("Zoom Out (-)");
+			gtk_menu_append (GTK_MENU(menu), widget);
+			gtk_widget_show(widget);
+			g_signal_connect(widget, "activate", G_CALLBACK(the_callback), cbContext(&context, CB_CONTROL_ZOUT));
+		}
 
 		vbox2 = gtk_vbox_new(FALSE, 1);
 		hbox = gtk_hbox_new(FALSE, 50);
@@ -589,25 +611,30 @@ int main(int argc, char *argv[])
 		// Toggle buttons
 		vbox = gtk_vbox_new(FALSE, 1);
 
-		hbox3 = gtk_hbox_new(TRUE, 1);
-		mode_ipcam = gtk_radio_button_new_with_label(NULL, "IPCam mode");
-		gtk_box_pack_start(GTK_BOX(hbox3), mode_ipcam, FALSE, FALSE, 8);
-		g_signal_connect(mode_ipcam, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_MODE_IPCAM));
+		{
+			hbox3 = gtk_hbox_new(TRUE, 1);
+			context.mode_ipcam = gtk_radio_button_new_with_label(NULL, "IPCam mode");
+			gtk_box_pack_start(GTK_BOX(hbox3), context.mode_ipcam, FALSE, FALSE, 8);
 
-		mode_droidcam = gtk_radio_button_new_with_label(gtk_radio_button_get_group(GTK_RADIO_BUTTON(mode_ipcam)),
-		                                                "Droidcam mode");
-		gtk_box_pack_start(GTK_BOX(hbox3), mode_droidcam, FALSE, FALSE, 8);
-		g_signal_connect(mode_ipcam, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_MODE_DROIDCAM));
+			context.mode_droidcam = gtk_radio_button_new_with_label(gtk_radio_button_get_group(GTK_RADIO_BUTTON(context.mode_ipcam)),
+			                                                "Droidcam mode");
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context.mode_droidcam), TRUE);
 
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(mode_droidcam), TRUE);
-		gtk_box_pack_start(GTK_BOX(vbox2), hbox3, FALSE, FALSE, 8);
+			gtk_box_pack_start(GTK_BOX(hbox3), context.mode_droidcam, FALSE, FALSE, 8);
+
+
+			g_signal_connect(context.mode_ipcam, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_MODE_IPCAM));
+			g_signal_connect(context.mode_droidcam, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_MODE_DROIDCAM));
+
+			gtk_box_pack_start(GTK_BOX(vbox2), hbox3, FALSE, FALSE, 8);
+		}
 
 		context.radioClient = gtk_radio_button_new_with_label(NULL, "WiFi / LAN");
 		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context.radioClient), TRUE);
 		g_signal_connect(context.radioClient, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_RADIO_WIFI));
 		gtk_box_pack_start(GTK_BOX(vbox), context.radioClient, FALSE, FALSE, 0);
 
-		context.radioServer = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "Wifi Server Mode");
+		context.radioServer = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(context.radioClient)), "Wifi Server Mode");
 		g_signal_connect(context.radioServer, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_WIFI_SRVR));
 		gtk_box_pack_start(GTK_BOX(vbox), context.radioServer, FALSE, FALSE, 0);
 
@@ -615,9 +642,11 @@ int main(int argc, char *argv[])
 		// g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_RADIO_BTH);
 //		gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
 
-		widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "USB (over adb)");
-		g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_RADIO_ADB));
-		gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+		{
+			GtkWidget *widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(context.radioServer)), "USB (over adb)");
+			g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_RADIO_ADB));
+			gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+		}
 
 		/* TODO: Figure out audio
 		widget = gtk_check_button_new_with_label("Enable Audio");
@@ -626,10 +655,12 @@ int main(int argc, char *argv[])
 		*/
 
 		hbox2 = gtk_hbox_new(FALSE, 1);
-		widget = gtk_button_new_with_label("...");
-		gtk_widget_set_size_request(widget, 40, 28);
-		g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), cbContext(&context, CB_BTN_OTR));
-		gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
+		{
+			GtkWidget *widget = gtk_button_new_with_label("...");
+			gtk_widget_set_size_request(widget, 40, 28);
+			g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), cbContext(&context, CB_BTN_OTR));
+			gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
+		}
 		gtk_box_pack_start(GTK_BOX(vbox), hbox2, FALSE, FALSE, 0);
 
 		gtk_box_pack_start(GTK_BOX(hbox), vbox, FALSE, FALSE, 0);
@@ -640,36 +671,46 @@ int main(int argc, char *argv[])
 
 		hbox2 = gtk_hbox_new(FALSE, 1);
 		gtk_box_pack_start(GTK_BOX(hbox2), gtk_label_new("Phone IP:"), FALSE, FALSE, 0);
-		widget = gtk_entry_new_with_max_length(16);
-		gtk_widget_set_size_request(widget, 120, 30);
-		context.ipEntry = (GtkEntry *) widget;
-		gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
+		{
+			context.ipEntry = gtk_entry_new_with_max_length(16);
+			gtk_widget_set_size_request(context.ipEntry, 120, 30);
+			gtk_box_pack_start(GTK_BOX(hbox2), context.ipEntry, FALSE, FALSE, 0);
+		}
 
-		widget = gtk_alignment_new(0, 0, 0, 0);
-		gtk_container_add(GTK_CONTAINER(widget), hbox2);
-		gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+		{
+			GtkWidget *widget = gtk_alignment_new(0, 0, 0, 0);
+			gtk_container_add(GTK_CONTAINER(widget), hbox2);
+			gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+		}
 
 		hbox2 = gtk_hbox_new(FALSE, 1);
 		gtk_box_pack_start(GTK_BOX(hbox2), gtk_label_new("DroidCam Port:"), FALSE, FALSE, 0);
-		widget = gtk_entry_new_with_max_length(5);
-		gtk_widget_set_size_request(widget, 60, 30);
-		context.portEntry = (GtkEntry *) widget;
-		gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
+		{
+			context.portEntry = gtk_entry_new_with_max_length(5);
+			gtk_widget_set_size_request(context.portEntry, 60, 30);
+			gtk_box_pack_start(GTK_BOX(hbox2), context.portEntry, FALSE, FALSE, 0);
+		}
 
-		widget = gtk_alignment_new(0, 0, 0, 0);
-		gtk_container_add(GTK_CONTAINER(widget), hbox2);
-		gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+		{
+			GtkWidget *widget = gtk_alignment_new(0, 0, 0, 0);
+			gtk_container_add(GTK_CONTAINER(widget), hbox2);
+			gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+		}
 
 		hbox2 = gtk_hbox_new(FALSE, 1);
-		widget = gtk_button_new_with_label("Connect");
-		gtk_widget_set_size_request(widget, 80, 30);
-		g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), cbContext(&context, CB_BUTTON));
-		gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
-		context.button = (GtkButton *) widget;
+		{
+			GtkWidget *widget = gtk_button_new_with_label("Connect");
+			gtk_widget_set_size_request(widget, 80, 30);
+			g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), cbContext(&context, CB_BUTTON));
+			gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
+			context.button = widget;
+		}
 
-		widget = gtk_alignment_new(1, 0, 0, 0);
-		gtk_container_add(GTK_CONTAINER(widget), hbox2);
-		gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 10);
+		{
+			GtkWidget *widget = gtk_alignment_new(1, 0, 0, 0);
+			gtk_container_add(GTK_CONTAINER(widget), hbox2);
+			gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 10);
+		}
 
 		gtk_box_pack_start(GTK_BOX(hbox), vbox, FALSE, FALSE, 0);
 
@@ -677,7 +718,9 @@ int main(int argc, char *argv[])
 
 		loadSettings(&context); // Load here after we have controls to put text into
 
-		g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+		// Update UI from settings
+
+		g_signal_connect(window, "destroy", G_CALLBACK(the_callback), cbContext(&context, CB_QUIT));
 		gtk_widget_show_all(window);
 
 		gdk_threads_enter();

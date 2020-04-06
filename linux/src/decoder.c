@@ -276,7 +276,7 @@ int decoder_init(JpgCtx *jpgCtx, OutputMode *droidcam_output_mode)
 
     fatal_error = 0;
     jpgCtx->jpg_decoder = malloc(sizeof(JpgDecContext));
-    memset(&jpgCtx->jpg_decoder, 0, sizeof(JpgDecContext));
+    memset(jpgCtx->jpg_decoder, 0, sizeof(JpgDecContext));
 	jpgCtx->jpg_decoder->dinfo.err = jpeg_std_error(&jpgCtx->jpg_decoder->jerr);
 	jpgCtx->jpg_decoder->jerr.output_message = joutput_message;
 	jpgCtx->jpg_decoder->jerr.error_exit = jerror_exit;

@@ -27,10 +27,12 @@ typedef enum _Callbacks {
 	CB_BTN_OTR,
 	CB_MODE_IPCAM,
 	CB_MODE_DROIDCAM,
+	CB_QUIT,
 	CB_CONTROL_ZIN = 16,  // 6
 	CB_CONTROL_ZOUT, // 7
 	CB_CONTROL_AF,  // 8
 	CB_CONTROL_LED, // 9
+
 } Callbacks;
 
 
@@ -64,11 +66,13 @@ typedef struct _JpegDecoder {
 
 typedef struct _DCContext {
 	Settings settings;
-	GtkButton *button;
-	GtkEntry *ipEntry;
-	GtkEntry *portEntry;
+	GtkWidget *button;
+	GtkWidget *ipEntry;
+	GtkWidget *portEntry;
 	GtkWidget *radioServer;
 	GtkWidget *radioClient;
+	GtkWidget *mode_ipcam;
+	GtkWidget *mode_droidcam;
 	gboolean running;
 	OutputMode droidcam_output_mode;
 	JpgCtx * jpgCtx;
