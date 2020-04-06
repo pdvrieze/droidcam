@@ -59,12 +59,12 @@ static size_t min(size_t a, size_t b)
 	return a < b ? a : b;
 }
 
-static gboolean readIntoBuffer(ReadBuffer *b, CurlContext *curlContext, const char *boundary, gboolean *running) {
+static gboolean readIntoBuffer(ReadBuffer *b, CurlContext *curlContext, const char *boundary, const gboolean *running) {
 	b->offset = 0;
 	while (*running && b->recvCount<4+strlen(boundary))
 	{
 		// Read first buffer content
-		int recvCount;
+		size_t recvCount;
 		CURLcode res = curl_easy_recv(curlContext->curl, b->buffer + b->recvCount, b->maxSize-b->recvCount, &recvCount);
 		while (res == CURLE_AGAIN && *running) {
 			int retval = wait_on_recv_socket(curlContext->socket, 250);// quarter of a second
