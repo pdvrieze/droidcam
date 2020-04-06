@@ -147,6 +147,9 @@ static void loadSettings(DCContext *context)
 
 		if (fgets(buf, sizeof(buf), fp)) {
 			buf[strlen(buf) - 1] = '\0';
+			char *end;
+			context->settings.port = strtol(buf, &end, 10);
+			if (end==buf) { context->settings.port = 4747; }
 		}
 
 		if (fgets(buf, sizeof(buf), fp)) {
@@ -162,6 +165,7 @@ static void loadSettings(DCContext *context)
 	}
 
 	gtk_entry_set_text(GTK_ENTRY(context->ipEntry), context->settings.hostName);
+
 	char portText[8];
 	memset(portText, 0, 8);
 	snprintf(portText, 7, "%d", context->settings.port);
