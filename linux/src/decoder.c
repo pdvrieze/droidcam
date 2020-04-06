@@ -361,7 +361,7 @@ int decoder_prepare_video(JpgCtx *jpgCtx, unsigned char *header)
     for (i = 0; i < JPG_BACKBUF_MAX; i++) {
 	    jpgCtx->jpg_frames[i].data = &jpgCtx->jpg_decoder->m_inBuf[i * jpgCtx->jpg_decoder->m_Yuv420Size];
 	    jpgCtx->jpg_frames[i].length = 0;
-        dbgprint("jpg: jpg_frames[%d]: %p\n", i, jpg_frames[i].data);
+        dbgprint("jpg: jpg_frames[%d]: %p\n", i, jpgCtx->jpg_frames[i].data);
     }
 
 	jpgCtx->jpg_decoder->m_BufferedFrames  = jpgCtx->jpg_decoder->m_NextFrame = jpgCtx->jpg_decoder->m_NextSlot = 0;
