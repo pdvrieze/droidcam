@@ -36,20 +36,42 @@ typedef enum _Callbacks {
 
 typedef struct _GtkEntry GtkEntry;
 typedef struct _GtkButton GtkButton;
+typedef struct _GtkWidget GtkWidget;
 
 typedef struct _Settings {
-	GtkEntry *ipEntry;
-	GtkEntry *portEntry;
+	char *hostName;
+	unsigned int port;
 	Callbacks connection; // Connection type
 	gboolean audio;
 	InputMode inputMode;
 } Settings;
 
+
+typedef struct jpg_dec_ctx_s JpgDecContext;
+
+
+typedef struct jpg_frame_s {
+	unsigned char *data;
+	unsigned length;
+} JpgFrame;
+
+#define JPG_BACKBUF_MAX 10
+
+typedef struct _JpegDecoder {
+	JpgFrame jpg_frames[JPG_BACKBUF_MAX];
+	JpgDecContext *jpg_decoder;
+} JpgCtx;
+
 typedef struct _DCContext {
-	Settings *settings;
+	Settings settings;
 	GtkButton *button;
+	GtkEntry *ipEntry;
+	GtkEntry *portEntry;
+	GtkWidget *radioServer;
+	GtkWidget *radioClient;
 	gboolean running;
 	OutputMode droidcam_output_mode;
+	JpgCtx * jpgCtx;
 } DCContext;
 
 typedef struct _ThreadArgs {

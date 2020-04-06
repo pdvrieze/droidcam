@@ -28,7 +28,7 @@ void ShowError(const char * title, const char * msg) {
     errprint("%s: %s\n", title, msg);
 }
 
-void stream_video(Settings *settings)
+void stream_video(DCContext *context)
 {
     char buf[32];
     int keep_waiting = 0;
@@ -44,7 +44,7 @@ void stream_video(Settings *settings)
 
 server_wait:
     if (videoSocket == INVALID_SOCKET) {
-        videoSocket = accept_connection(g_port, settings->running);
+        videoSocket = accept_connection(g_port, context->running);
         if (videoSocket == INVALID_SOCKET) { goto early_out; }
         keep_waiting = 1;
     }
@@ -63,13 +63,13 @@ server_wait:
         goto early_out;
     }
 
-    if (decoder_prepare_video(buf) == FALSE) {
+    if (decoder_prepare_video(context->jpgCtx, buf) == FALSE) {
         goto early_out;
     }
 
     while (1){
         int frameLen;
-        struct jpg_frame_s *f = decoder_get_next_frame();
+        struct jpg_frame_s *f = decoder_get_next_frame(context->jpgCtx);
         if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
         make_int4(frameLen, buf[0], buf[1], buf[2], buf[3]);
         f->length = frameLen;
@@ -85,7 +85,7 @@ server_wait:
 early_out:
     dbgprint("disconnect\n");
     disconnect(videoSocket);
-    decoder_cleanup();
+	decoder_cleanup(context->jpgCtx);
 
     if (keep_waiting){
         videoSocket = INVALID_SOCKET;
@@ -123,12 +123,13 @@ int main(int argc, char *argv[]) {
     }
 
     Settings settings;
-    int outputMode;
+    JpgCtx jpgCtx;
+    OutputMode outputMode;
 
-    if (!decoder_init(&outputMode)) {
+    if (!decoder_init(&jpgCtx, &outputMode)) {
         return 2;
     }
     stream_video(&settings);
-    decoder_fini();
+	decoder_fini(&jpgCtx);
     return 0;
 }

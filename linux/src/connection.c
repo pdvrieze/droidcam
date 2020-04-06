@@ -21,7 +21,7 @@
 
 SOCKET wifiServerSocket = INVALID_SOCKET;
 
-SOCKET connect_droidcam(char * ip, int port)
+SOCKET connect_droidcam(char * ip, unsigned int port)
 {
     struct sockaddr_in sin;
     SOCKET sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -129,7 +129,7 @@ void disconnect(SOCKET s) {
     close(s);
 }
 
-SOCKET accept_connection(int port, int *running)
+SOCKET accept_connection(unsigned int port, int *running)
 {
     int flags;
     SOCKET client =  INVALID_SOCKET;

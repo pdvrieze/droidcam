@@ -14,26 +14,24 @@
 
 typedef unsigned char BYTE;
 
-struct jpg_frame_s {
- BYTE *data;
- unsigned length;
-};
 
-int loopback_init(unsigned int width, unsigned int height);
-int  decoder_init(OutputMode *droidcam_output_mode);
-void decoder_fini();
 
-int  decoder_prepare_video(unsigned char * header);
-void decoder_cleanup();
+int loopback_init(JpgCtx *jpgCtx, unsigned int width, unsigned int height);
+int decoder_init(JpgCtx *jpgCtx, OutputMode *droidcam_output_mode);
+void decoder_fini(JpgCtx *jpgCtx);
 
-struct jpg_frame_s* decoder_get_next_frame();
-void decoder_set_video_delay(unsigned v);
-int decoder_get_video_width();
-int decoder_get_video_height();
-void decoder_rotate();
-void decoder_show_test_image(int *droidcam_output_mode);
+int decoder_prepare_video(JpgCtx *jpgCtx, unsigned char *header);
+void decoder_cleanup(JpgCtx *jpgCtx);
 
-int x_droidcam_output_mode;
+JpgFrame * decoder_get_next_frame(JpgCtx *jpgCtx);
+
+void decoder_set_video_delay(JpgCtx *jpgCtx, unsigned v);
+unsigned int decoder_get_video_width();
+unsigned int decoder_get_video_height();
+void decoder_rotate(JpgCtx *jpgCtx);
+void decoder_show_test_image(JpgCtx *jpgCtx, const OutputMode *droidcam_output_mode);
+
+void decoder_source_dimensions(JpgCtx *jpgCtx, unsigned int *width, unsigned int *height);
 
 /* 20ms 16hkz 16 bit */
 #define DROIDCAM_CHUNK_MS_2           20

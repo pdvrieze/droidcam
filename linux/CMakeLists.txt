@@ -6,6 +6,7 @@ set(CMAKE_C_FLAGS_RELEASE "-march=native -mtune=native -O2 -Wall")
 set(CMAKE_C_STANDARD 11)
 
 include(FindPkgConfig)
+include(FindCURL)
 
 #find_package(GTK2 2.6 REQUIRED gtk)
 find_path(SWSCALE_INCLUDE_DIRS libswscale/swscale.h)
@@ -25,8 +26,9 @@ include_directories(${SWSCALE_INCLUDE_DIRS})
 include_directories(${JPEG_INCLUDE_DIRS})
 
 target_include_directories(droidcam PUBLIC "${GTK2_INCLUDE_DIRS}")
+target_include_directories(droidcam PUBLIC "${CURL_INCLUDE_DIRS}")
 #target_include_directories(droidcam PUBLIC "${GTK_INCLUDE_DIRS}")
 target_link_libraries(droidcam ${GTK2_LDFLAGS})
-target_link_libraries(droidcam m swscale ${JPEG_LDFLAGS} ${JPEGTURBO_LDFLAGS} ${GTHREAD2_LDFLAGS})
+target_link_libraries(droidcam m swscale ${JPEG_LDFLAGS} ${JPEGTURBO_LDFLAGS} ${GTHREAD2_LDFLAGS} ${CURL_LIBRARIES})
 #target_link_libraries(droidcam m swscale libturbojpeg.a ${GTHREAD2_LDFLAGS})
 target_link_libraries(droidcam-cli m swscale ${JPEG_LDFLAGS} ${JPEGTURBO_LDFLAGS} ${GTHREAD2_LDFLAGS})
