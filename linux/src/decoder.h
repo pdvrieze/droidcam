@@ -15,34 +15,40 @@
 typedef unsigned char BYTE;
 
 
-class JpgCtx {
+class Decoder {
 public:
-	JpgCtx();
-	~JpgCtx();
+
+	Decoder();
+	~Decoder();
+
+	OutputMode outputMode() {return _outputMode; };
+
+	bool loopback_init(unsigned int width, unsigned int height);
+	bool decoder_init();
+
+public: // TODO make this private
 	Buffer jpg_frames[JPG_BACKBUF_MAX];
 	std::unique_ptr<JpgDecContext> jpg_decoder;
-	bool loopback_init(unsigned int width, unsigned int height);
+
+private:
+	OutputMode _outputMode;
 };
 
 
+int decoder_prepare_video(Decoder *jpgCtx, char *header);
+int decoder_prepare_video3(Decoder *jpgCtx, unsigned int srcWidth, unsigned int srcHeight);
+int decoder_prepare_video_from_frame(Decoder *jpgCtx, Buffer *data);
+void decoder_cleanup(Decoder *jpgCtx);
 
-bool decoder_init(JpgCtx *jpgCtx, OutputMode &droidcam_output_mode);
-void decoder_fini(JpgCtx *jpgCtx);
+Buffer * decoder_get_next_frame(Decoder *jpgCtx);
 
-int decoder_prepare_video(JpgCtx *jpgCtx, char *header);
-int decoder_prepare_video3(JpgCtx *jpgCtx, unsigned int srcWidth, unsigned int srcHeight);
-int decoder_prepare_video_from_frame(JpgCtx *jpgCtx, Buffer *data);
-void decoder_cleanup(JpgCtx *jpgCtx);
-
-Buffer * decoder_get_next_frame(JpgCtx *jpgCtx);
-
-void decoder_set_video_delay(JpgCtx *jpgCtx, unsigned v);
+void decoder_set_video_delay(Decoder *jpgCtx, unsigned v);
 unsigned int decoder_get_video_width();
 unsigned int decoder_get_video_height();
-void decoder_rotate(JpgCtx *jpgCtx);
-void decoder_show_test_image(JpgCtx *jpgCtx, const OutputMode *droidcam_output_mode);
+void decoder_rotate(Decoder *jpgCtx);
+void decoder_show_test_image(Decoder *jpgCtx, const OutputMode *droidcam_output_mode);
 
-void decoder_source_dimensions(JpgCtx *jpgCtx, unsigned int *width, unsigned int *height);
+void decoder_source_dimensions(Decoder *jpgCtx, unsigned int *width, unsigned int *height);
 
 /* 20ms 16hkz 16 bit */
 #define DROIDCAM_CHUNK_MS_2           20

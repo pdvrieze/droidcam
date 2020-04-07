@@ -71,7 +71,7 @@ typedef struct _CallbackContext {
 	Callback cb;
 } CallbackContext;
 
-class JpgCtx;
+class Decoder;
 
 typedef struct _DCContext {
 	Settings settings;
@@ -83,8 +83,7 @@ typedef struct _DCContext {
 	GtkWidget *mode_ipcam;
 	GtkWidget *mode_droidcam;
 	gboolean running;
-	OutputMode droidcam_output_mode;
-	JpgCtx * jpgCtx;
+	Decoder * jpgCtx;
 	CallbackContext callbackData[20];
 } DCContext;
 

@@ -123,13 +123,12 @@ int main(int argc, char *argv[]) {
     }
 
     Settings settings={};
-    JpgCtx jpgCtx ={};
-    OutputMode outputMode =OM_DROIDCAM;
+    Decoder decoder;
+    OutputMode outputMode =OutputMode::OM_DROIDCAM;
 
-    if (!decoder_init(&jpgCtx, &outputMode)) {
+	if (!(&decoder)->decoder_init()) {
         return 2;
     }
     stream_video(&settings);
-	decoder_fini(&jpgCtx);
     return 0;
 }

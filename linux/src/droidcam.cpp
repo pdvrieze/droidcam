@@ -229,7 +229,7 @@ void *DroidcamVideoThreadProc(void *args)
 {
 	SOCKET videoSocket;
 	DCContext *context;
-	JpgCtx *jpgCtx;
+	Decoder *jpgCtx;
 	{
 		ThreadArgs *threadArgs = (ThreadArgs *) args;
 		videoSocket = threadArgs->socket;
@@ -253,10 +253,10 @@ void *DroidcamVideoThreadProc(void *args)
 		keep_waiting = 1;
 	}
 
-	if (context->droidcam_output_mode == OutputMode::OM_V4LLOOPBACK) {
+	if (jpgCtx->outputMode() == OutputMode::OM_V4LLOOPBACK) {
 		jpgCtx->loopback_init(1280, 720);
 
-	} else if (context->droidcam_output_mode != OutputMode::OM_DROIDCAM) {
+	} else if (jpgCtx->outputMode() != OutputMode::OM_DROIDCAM) {
 		throw DroidcamException("Droidcam not in proper output mode");
 	}
 
@@ -524,17 +524,16 @@ static CallbackContext *cbContext(DCContext *context, Callback cb)
 
 int main(int argc, char *argv[])
 {
-	JpgCtx jpgCtx = {};
+	Decoder decoder = {};
 	DCContext context = {
 		.settings = {},
 		.button=NULL,
 		.running=FALSE,
-		.droidcam_output_mode=OutputMode::OM_MISSING,
-		.jpgCtx = &jpgCtx
+		.jpgCtx = &decoder
 	};
 
 
-	if (decoder_init(&jpgCtx, context.droidcam_output_mode)) {
+	if ((&decoder)->decoder_init()) {
 
 		GtkWidget *window;
 		GtkWidget *hbox, *hbox2, *hbox3;
@@ -736,7 +735,6 @@ int main(int argc, char *argv[])
 
 		FREE_OBJECT(context.settings.hostName, free)
 
-		decoder_fini(&jpgCtx);
 		connection_cleanup();
 	}
 

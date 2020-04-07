@@ -13,6 +13,7 @@
 #include <gtk/gtk.h>
 #include <curl/curl.h>
 #include <string.h>
+#include <jmorecfg.h>
 
 typedef enum _State {
 	ST_INIT, // nothing done
@@ -226,7 +227,7 @@ static gboolean consumeSubHeader(CurlContext *curlContext)
 	return TRUE;
 }
 
-gboolean readBoundary(CurlContext *curlContext)
+bool readBoundary(CurlContext *curlContext)
 {
 	char *contentType;
 	CURLcode res = curl_easy_getinfo(curlContext->easy, CURLINFO_CONTENT_TYPE, &contentType);
@@ -240,12 +241,12 @@ gboolean readBoundary(CurlContext *curlContext)
 	char *end = start + strlen(start);
 	if (start == NULL) {
 		MSG_ERROR("Missing boundary");
-		return FALSE;
+		return false;
 	}
 	for (start += 8; *start == ' ' && (start < end); ++start) {}
 	if (*start != '=') {
 		MSG_ERROR("No equals for boundary");
-		return FALSE;
+		return false;
 	}
 	do {
 		++start;
@@ -253,7 +254,7 @@ gboolean readBoundary(CurlContext *curlContext)
 
 	strncpy(curlContext->boundary, start, sizeof(curlContext->boundary));
 	dbgprint("Found boundary: '%s'\n", curlContext->boundary);
-
+	return true;
 }
 
 gboolean consumeFrame(CurlContext *curlContext)
@@ -272,7 +273,7 @@ gboolean consumeFrame(CurlContext *curlContext)
 		b->offset = 0;
 	}
 
-	if (curlContext->dcContext->jpgCtx->jpg_frames[0].data == NULL) { // Not initialized
+	if (curlContext->dcContext->jpgCtx->jpg_frames[0].data == nullptr) { // Not initialized
 		if (decoder_prepare_video_from_frame(curlContext->dcContext->jpgCtx, resultPtr) == FALSE) {
 			dbgprint("Could not prepare video from frame\n");
 			curlContext->state = ST_ERROR;
@@ -286,8 +287,8 @@ gboolean consumeFrame(CurlContext *curlContext)
 
 void sendFrame(CurlContext *curlContext)
 {
-	JpgCtx *jpgCtx = curlContext->dcContext->jpgCtx;
-	if (curlContext->dcContext->droidcam_output_mode == OutputMode::OM_V4LLOOPBACK) {
+	Decoder *jpgCtx = curlContext->dcContext->jpgCtx;
+	if (jpgCtx->outputMode() == OutputMode::OM_V4LLOOPBACK) {
 		unsigned int width, height;
 		decoder_source_dimensions(jpgCtx, &width, &height);
 		if (width != decoder_get_video_width() || height != decoder_get_video_height()) {
@@ -397,7 +398,8 @@ void *ipcamVideoThreadProc(void *args)
 	FREE_OBJECT(curlContext.out.data, free)
 
 	decoder_cleanup(context->jpgCtx);
-	decoder_init(context->jpgCtx, context->droidcam_output_mode);
+	bool result;
+	result = context->jpgCtx->decoder_init();
 
 	curl_easy_cleanup(curlContext.easy);
 

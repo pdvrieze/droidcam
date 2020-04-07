@@ -66,11 +66,30 @@ typedef enum {
 	TJSAMP_NIL = 1001
 } TJSAMP_Ext;
 
+
+
+#define WEBCAM_Wf ((float)WEBCAM_W)
+#define WEBCAM_Hf ((float)WEBCAM_H)
+static unsigned int WEBCAM_W, WEBCAM_H;
+static int droidcam_device_fd;
+
+#undef MAX_COMPONENTS
+#define MAX_COMPONENTS  4
+
+static const int pixelsize[TJ_NUMSAMP] = {3, 3, 3, 1, 3, 3};
+
+#define PAD(v, p) ((v+(p)-1)&(~((p)-1)))
+
+
+static int fatal_error = 0;
+
+
 class JpgDecContext {
 public:
 	struct jpeg_decompress_struct dinfo;
 	struct jpeg_error_mgr jerr;
-	gboolean init;
+
+	bool init;
 	TJSAMP_Ext subsamp;
 	unsigned int srcWidth, srcHeight;
 	unsigned int m_Yuv420Size, m_ySize, m_uvSize;
@@ -97,32 +116,31 @@ public:
 };
 
 
-JpgCtx::JpgCtx() : jpg_decoder(std::make_unique<JpgDecContext>())
+Decoder::Decoder() : jpg_decoder(std::make_unique<JpgDecContext>())
 {
 
 }
 
-JpgCtx::~JpgCtx() = default;
+Decoder::~Decoder() {
+	if (droidcam_device_fd) close(droidcam_device_fd);
+	dbgprint("spx_decoder.state=%p\n", spx_decoder.state);
+	if (spx_decoder.state != nullptr) {
+#if 0
+		speex_bits_destroy(&spx_decoder.bits);
+		speex_decoder_destroy(spx_decoder.state);
+#endif
+		spx_decoder.state = nullptr;
+	}
+	fatal_error = 0;
+	if (jpg_decoder->init) {
+		jpeg_destroy_decompress(&jpg_decoder->dinfo);
+		jpg_decoder->init = FALSE;
+	}
+};
 
+static void decoder_share_frame(Decoder *jpgCtx);
 
-#define WEBCAM_Wf ((float)WEBCAM_W)
-#define WEBCAM_Hf ((float)WEBCAM_H)
-static unsigned int WEBCAM_W, WEBCAM_H;
-static int droidcam_device_fd;
-
-#undef MAX_COMPONENTS
-#define MAX_COMPONENTS  4
-
-static const int pixelsize[TJ_NUMSAMP] = {3, 3, 3, 1, 3, 3};
-
-#define PAD(v, p) ((v+(p)-1)&(~((p)-1)))
-
-
-static int fatal_error = 0;
-
-static void decoder_share_frame(JpgCtx *jpgCtx);
-
-static void decoder_set_stransform(JpgCtx *jpgCtx, int value);
+static void decoder_set_stransform(Decoder *jpgCtx, int value);
 
 void joutput_message(j_common_ptr cinfo)
 {
@@ -238,7 +256,7 @@ static void query_droidcam_v4l(void)
 	WEBCAM_H = vid_format.fmt.pix.height;
 }
 
-void decoder_set_video_delay(JpgCtx *jpgCtx, unsigned v)
+void decoder_set_video_delay(Decoder *jpgCtx, unsigned v)
 {
 	if (v > JPG_BACKBUF_MAX) v = JPG_BACKBUF_MAX;
 	else if (v < 1) v = 1;
@@ -246,7 +264,7 @@ void decoder_set_video_delay(JpgCtx *jpgCtx, unsigned v)
 	dbgprint("buffer %d frames\n", jpgCtx->jpg_decoder->m_BufferLimit);
 }
 
-bool JpgCtx::loopback_init(unsigned int width, unsigned int height)
+bool Decoder::loopback_init(unsigned int width, unsigned int height)
 {
 	WEBCAM_W = width;
 	WEBCAM_H = height;
@@ -279,39 +297,40 @@ bool JpgCtx::loopback_init(unsigned int width, unsigned int height)
 	return true;
 }
 
-bool decoder_init(JpgCtx *jpgCtx, OutputMode &droidcam_output_mode)
+bool Decoder::decoder_init()
 {
 	WEBCAM_W = 0;
 	WEBCAM_H = 0;
 
-	droidcam_output_mode = find_droidcam_v4l();
+	_outputMode = find_droidcam_v4l();
 
-	if (droidcam_output_mode == OutputMode::OM_MISSING)
+	if (_outputMode == OutputMode::OM_MISSING)
 		return false;
 
-	if (droidcam_output_mode == OutputMode::OM_DROIDCAM) { // droidcam mode
+
+	if (_outputMode == OutputMode::OM_DROIDCAM) { // droidcam mode
 		query_droidcam_v4l();
 		dbgprint("WEBCAM_W=%d, WEBCAM_H=%d\n", WEBCAM_W, WEBCAM_H);
 		if (WEBCAM_W < 2 || WEBCAM_H < 2 || WEBCAM_W > 9999 || WEBCAM_H > 9999) {
 			MSG_ERROR("Unable to query droidcam device for parameters");
-			return 0;
+			return false;
 		}
 	}
 
 	fatal_error = 0;
-	jpgCtx->jpg_decoder->dinfo.err = jpeg_std_error(&jpgCtx->jpg_decoder->jerr);
-	jpgCtx->jpg_decoder->jerr.output_message = joutput_message;
-	jpgCtx->jpg_decoder->jerr.error_exit = jerror_exit;
-	jpeg_create_decompress(&jpgCtx->jpg_decoder->dinfo);
+	jpg_decoder->dinfo.err = jpeg_std_error(&jpg_decoder->jerr);
+	jpg_decoder->jerr.output_message = joutput_message;
+	jpg_decoder->jerr.error_exit = jerror_exit;
+	jpeg_create_decompress(&jpg_decoder->dinfo);
 
-	if (fatal_error) return 0;
-	jpgCtx->jpg_decoder->init = TRUE;
-	jpgCtx->jpg_decoder->subsamp = TJSAMP_NIL;
-	jpgCtx->jpg_decoder->m_webcamYuvSize = WEBCAM_W * WEBCAM_H * 3 / 2;
-	jpgCtx->jpg_decoder->m_webcam_ySize = WEBCAM_W * WEBCAM_H;
-	jpgCtx->jpg_decoder->m_webcam_uvSize = jpgCtx->jpg_decoder->m_webcam_ySize / 4;
-	jpgCtx->jpg_decoder->transform = 0;
-	decoder_set_video_delay(jpgCtx, 0);
+	if (fatal_error) return false;
+	jpg_decoder->init = TRUE;
+	jpg_decoder->subsamp = TJSAMP_NIL;
+	jpg_decoder->m_webcamYuvSize = WEBCAM_W * WEBCAM_H * 3 / 2;
+	jpg_decoder->m_webcam_ySize = WEBCAM_W * WEBCAM_H;
+	jpg_decoder->m_webcam_uvSize = jpg_decoder->m_webcam_ySize / 4;
+	jpg_decoder->transform = 0;
+	decoder_set_video_delay(this, 0);
 
 #if 0
 	speex_bits_init(&spx_decoder.bits);
@@ -320,29 +339,11 @@ bool decoder_init(JpgCtx *jpgCtx, OutputMode &droidcam_output_mode)
 	dbgprint("spx_decoder.state=%p\n", spx_decoder.state);
 #endif
 
-	return 1;
-}
-
-void decoder_fini(JpgCtx *jpgCtx)
-{
-	if (droidcam_device_fd) close(droidcam_device_fd);
-	dbgprint("spx_decoder.state=%p\n", spx_decoder.state);
-	if (spx_decoder.state != NULL) {
-#if 0
-		speex_bits_destroy(&spx_decoder.bits);
-		speex_decoder_destroy(spx_decoder.state);
-#endif
-		spx_decoder.state = NULL;
-	}
-	fatal_error = 0;
-	if (jpgCtx->jpg_decoder->init) {
-		jpeg_destroy_decompress(&jpgCtx->jpg_decoder->dinfo);
-		jpgCtx->jpg_decoder->init = FALSE;
-	}
+	return true;
 }
 
 
-int decoder_prepare_video_from_frame(JpgCtx *jpgCtx, Buffer *data)
+int decoder_prepare_video_from_frame(Decoder *jpgCtx, Buffer *data)
 {
 	auto &dec = jpgCtx->jpg_decoder;
 	struct jpeg_decompress_struct *dinfo = &(dec->dinfo);
@@ -353,7 +354,7 @@ int decoder_prepare_video_from_frame(JpgCtx *jpgCtx, Buffer *data)
 }
 
 
-int decoder_prepare_video(JpgCtx *jpgCtx, char *header)
+int decoder_prepare_video(Decoder *jpgCtx, char *header)
 {
 	unsigned int srcWidth, srcHeight;
 	make_int(srcWidth, header[0], header[1]);
@@ -362,7 +363,7 @@ int decoder_prepare_video(JpgCtx *jpgCtx, char *header)
 }
 
 
-int decoder_prepare_video3(JpgCtx *jpgCtx, unsigned int srcWidth, unsigned int srcHeight)
+int decoder_prepare_video3(Decoder *jpgCtx, unsigned int srcWidth, unsigned int srcHeight)
 {
 
 	if (srcWidth <= 0 || srcHeight <= 0) {
@@ -428,7 +429,7 @@ int decoder_prepare_video3(JpgCtx *jpgCtx, unsigned int srcWidth, unsigned int s
 	return TRUE;
 }
 
-void decoder_cleanup(JpgCtx *jpgCtx)
+void decoder_cleanup(Decoder *jpgCtx)
 {
 	dbgprint("Cleanup\n");
 	for (int i = 0; i < MAX_COMPONENTS; i++) {
@@ -449,7 +450,7 @@ void decoder_cleanup(JpgCtx *jpgCtx)
 	memset(&(*(jpgCtx->jpg_decoder)), 0, sizeof(JpgDecContext));
 }
 
-static void decode_next_frame(JpgCtx *jpgCtx)
+static void decode_next_frame(Decoder *jpgCtx)
 {
 	struct jpeg_decompress_struct *dinfo = &jpgCtx->jpg_decoder->dinfo;
 	BYTE *p = jpgCtx->jpg_frames[jpgCtx->jpg_decoder->m_NextFrame].data;
@@ -592,7 +593,7 @@ static void apply_transform_helper(const uint8_t *src, uint8_t *dst,
 }
 
 /* scratch is a working buffer of 2*ySize (2 * w * h) length */
-static void apply_transform(JpgCtx *jpgCtx, BYTE *yuv420image, BYTE *scratch)
+static void apply_transform(Decoder *jpgCtx, BYTE *yuv420image, BYTE *scratch)
 {
 
 	// Transform Y component as is
@@ -663,7 +664,7 @@ static void apply_transform(JpgCtx *jpgCtx, BYTE *yuv420image, BYTE *scratch)
 	}
 }
 
-static void decoder_share_frame(JpgCtx *jpgCtx)
+static void decoder_share_frame(Decoder *jpgCtx)
 {
 	BYTE *p = jpgCtx->jpg_decoder->m_decodeBuf;
 	if (jpgCtx->jpg_decoder->swc != NULL) {
@@ -704,7 +705,7 @@ static void decoder_share_frame(JpgCtx *jpgCtx)
 	write(droidcam_device_fd, p, jpgCtx->jpg_decoder->m_webcamYuvSize);
 }
 
-void decoder_show_test_image(JpgCtx *jpgCtx, const OutputMode *droidcam_output_mode)
+void decoder_show_test_image(Decoder *jpgCtx, const OutputMode *droidcam_output_mode)
 {
 
 	int i, j;
@@ -745,7 +746,7 @@ void decoder_show_test_image(JpgCtx *jpgCtx, const OutputMode *droidcam_output_m
 	decoder_rotate(jpgCtx);
 }
 
-static void decoder_set_stransform(JpgCtx *jpgCtx, int value)
+static void decoder_set_stransform(Decoder *jpgCtx, int value)
 {
 	float scale = 1.0f;
 	float moveX = 0;
@@ -787,7 +788,7 @@ static void decoder_set_stransform(JpgCtx *jpgCtx, int value)
 	fill_matrix(moveX, moveY, rot, 1.0f, jpgCtx->jpg_decoder->angle_matrix);
 }
 
-void decoder_rotate(JpgCtx *jpgCtx)
+void decoder_rotate(Decoder *jpgCtx)
 {
 	decoder_set_stransform(jpgCtx, jpgCtx->jpg_decoder->transform + 1);
 }
@@ -797,7 +798,7 @@ void decoder_rotate(JpgCtx *jpgCtx)
  * @param jpgCtx The jpeg decoding context
  * @return the frame to write to
  */
-Buffer *decoder_get_next_frame(JpgCtx *jpgCtx)
+Buffer *decoder_get_next_frame(Decoder *jpgCtx)
 {
 	const auto &jpg_decoder = jpgCtx->jpg_decoder;
 	while (jpg_decoder->m_BufferedFrames > jpg_decoder->m_BufferLimit) {
@@ -834,7 +835,7 @@ unsigned int decoder_get_video_height()
 	return WEBCAM_H;
 }
 
-void decoder_source_dimensions(JpgCtx *jpgCtx, unsigned int *width, unsigned int *height)
+void decoder_source_dimensions(Decoder *jpgCtx, unsigned int *width, unsigned int *height)
 {
 	*width = jpgCtx->jpg_decoder->dinfo.image_width;
 	*height = jpgCtx->jpg_decoder->dinfo.image_height;
