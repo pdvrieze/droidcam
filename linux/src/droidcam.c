@@ -21,17 +21,13 @@
 #include "icon.h"
 #include "context.h"
 #include "ipcam.h"
+#include "util.h"
 
-
-typedef struct _CallbackContext {
-	DCContext *context;
-	Callbacks cb;
-} CallbackContext;
 
 /* Globals */
 GtkWidget *menu;
 GThread *hVideoThread;
-Callbacks thread_cmd = 0;
+Callback thread_cmd = 0;
 int wifi_srvr_mode = 0;
 
 /* Helper Functions */
@@ -64,7 +60,7 @@ static int CheckAdbDevices(unsigned int port)
 	while (!feof(pipe)) {
 		dbgprint("->");
 		if (fgets(buf, sizeof(buf), pipe) == NULL) break;
-		dbgprint("Got line: %s", buf);
+		dbgprint("Got line: %s\n", buf);
 
 		if (strstr(buf, "List of") != NULL) {
 			haveDevice = 2;
@@ -113,7 +109,7 @@ static void loadSettings(DCContext *context)
 	context->settings.hostName = strdup("");
 	context->settings.port = 4747;
 
-	dbgprint("set defaults...");
+	dbgprint("set defaults...\n");
 	gtk_entry_set_text(GTK_ENTRY(context->ipEntry), "");
 	gtk_entry_set_text(GTK_ENTRY(context->portEntry), "4747");
 
@@ -140,7 +136,7 @@ static void loadSettings(DCContext *context)
 		if (fgets(buf, sizeof(buf), fp)) {
 			buf[strlen(buf) - 1] = '\0';
 
-			free(context->settings.hostName);
+			FREE_OBJECT(context->settings.hostName, free);
 			context->settings.hostName = strdup(buf);
 
 		}
@@ -287,7 +283,7 @@ void *DroidcamVideoThreadProc(void *args)
 		Buffer *f = decoder_get_next_frame(jpgCtx);
 		if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
 		make_int4(frameLen, buf[0], buf[1], buf[2], buf[3]);
-		f->length = frameLen;
+		f->data_length = frameLen;
 		char *p = (char *) f->data;
 		while (frameLen > 4096) {
 			if (recvFromSocket(p, 4096, videoSocket) == FALSE) goto early_out;
@@ -350,7 +346,7 @@ accel_callback(GtkAccelGroup *group,
 {
 	DCContext *context = ((CallbackContext *) user_data)->context;
 	if (context->running == 1 && thread_cmd == 0) {
-		thread_cmd = (Callbacks) user_data;
+		thread_cmd = (Callback) user_data;
 	}
 	return TRUE;
 }
@@ -385,7 +381,7 @@ static void doConnect(DCContext *context)
 			droidcam_socket = connect_droidcam(ip, settings->port);
 
 			if (droidcam_socket == INVALID_SOCKET) {
-				dbgprint("failed");
+				dbgprint("failed\n");
 				gtk_button_set_label(GTK_BUTTON(context->button), "Connect");
 				return;
 			}
@@ -421,7 +417,7 @@ static void doDisconnect(DCContext *context)
 
 static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 {
-	Callbacks cb = callbackContext->cb;
+	Callback cb = callbackContext->cb;
 	DCContext *context = callbackContext->context;
 	gboolean ipEdit = TRUE;
 	gboolean portEdit = TRUE;
@@ -514,16 +510,16 @@ static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 	}
 }
 
-static CallbackContext *cbContext(DCContext *context, Callbacks cb)
+static CallbackContext *cbContext(DCContext *context, Callback cb)
 {
-	CallbackContext *result = malloc(sizeof(CallbackContext));
+	CallbackContext *result = &context->callbackData[cb];
 	*result = (CallbackContext) {context, cb};
 	return result;
 }
 
 int main(int argc, char *argv[])
 {
-	JpgCtx jpgCtx;
+	JpgCtx jpgCtx = {};
 	DCContext context = {
 		.settings = {},
 		.button=NULL,
@@ -732,6 +728,8 @@ int main(int argc, char *argv[])
 		gdk_threads_leave();
 
 		if (context.running == 1) StopVideo(&context);
+
+		FREE_OBJECT(context.settings.hostName, free)
 
 		decoder_fini(&jpgCtx);
 		connection_cleanup();

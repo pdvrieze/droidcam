@@ -122,9 +122,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    Settings settings;
-    JpgCtx jpgCtx;
-    OutputMode outputMode;
+    Settings settings={};
+    JpgCtx jpgCtx ={};
+    OutputMode outputMode =OM_DROIDCAM;
 
     if (!decoder_init(&jpgCtx, &outputMode)) {
         return 2;

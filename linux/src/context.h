@@ -33,7 +33,7 @@ typedef enum _Callbacks {
 	CB_CONTROL_AF,  // 8
 	CB_CONTROL_LED, // 9
 
-} Callbacks;
+} Callback;
 
 
 typedef struct _GtkEntry GtkEntry;
@@ -43,7 +43,7 @@ typedef struct _GtkWidget GtkWidget;
 typedef struct _Settings {
 	char *hostName;
 	unsigned int port;
-	Callbacks connection; // Connection type
+	Callback connection; // Connection type
 	gboolean audio;
 	InputMode inputMode;
 } Settings;
@@ -54,7 +54,8 @@ typedef struct _JpgDecContext JpgDecContext;
 
 typedef struct _Buffer {
 	unsigned char *data;
-	unsigned length;
+	size_t buf_size;
+	size_t data_length;
 } Buffer;
 
 #define JPG_BACKBUF_MAX 10
@@ -63,6 +64,13 @@ typedef struct _JpegDecoder {
 	Buffer jpg_frames[JPG_BACKBUF_MAX];
 	JpgDecContext *jpg_decoder;
 } JpgCtx;
+
+typedef struct _DCContext DCContext;
+
+typedef struct _CallbackContext {
+	DCContext *context;
+	Callback cb;
+} CallbackContext;
 
 typedef struct _DCContext {
 	Settings settings;
@@ -76,6 +84,7 @@ typedef struct _DCContext {
 	gboolean running;
 	OutputMode droidcam_output_mode;
 	JpgCtx * jpgCtx;
+	CallbackContext callbackData[20];
 } DCContext;
 
 typedef struct _ThreadArgs {
@@ -85,6 +94,6 @@ typedef struct _ThreadArgs {
 //	int droidcam_output_mode;
 } ThreadArgs;
 
-Callbacks thread_cmd;
+Callback thread_cmd;
 
 #endif //DROIDCAM_CONTEXT_H

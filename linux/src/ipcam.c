@@ -6,6 +6,7 @@
 #include "connection.h"
 #include "context.h"
 #include "common.h"
+#include "util.h"
 #include "decoder.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,7 +46,7 @@ static const int LINESIZE = 1 * 1024;
 static const int FRAME_MAX = 4 * 1024;
 static const char CR = 13;
 static const char LF = 10;
-static const char CRLF[] = {CR, LF};
+static const char CRLF[] = {CR, LF, 0};
 
 gboolean startsWith(const char *haystack, const char *needle)
 {
@@ -79,6 +80,7 @@ static gboolean readIntoBuffer(ReadBuffer *b, const char *data, size_t size)
 	if (b->buffer!=NULL) {
 		b->recvCount -= b->offset;
 		memmove(b->buffer, b->buffer + b->offset, b->recvCount);
+		memset(b->buffer+b->recvCount, 0, b->maxSize-b->recvCount); // Set to zero
 	}
 	b->offset = 0;
 	size_t needed_size = b->recvCount + size;
@@ -143,13 +145,15 @@ static gboolean consumeBoundary(CurlContext * curlContext)
 	const char *boundary = curlContext->boundary;
 	size_t maxOffset = 2 + strlen(boundary);
 
+	const unsigned char *lastAvail = b->buffer+b->recvCount;
+
 	const unsigned char *current = b->buffer + b->offset;
 
-	if (startsWith(current, CRLF)) {current+=2;} // skip newline
+	if (current[0]==CR && current[1]==LF) {current+=2; ++(b->offset);} // skip newline
 
 	size_t offset = 0;
 
-	while (offset < maxOffset && current < (b->buffer + b->recvCount - maxOffset + offset)) {
+	while (offset < maxOffset && current < lastAvail) {
 		if (offset == 0 || offset == 1) {
 			if (*current == '-') {
 				++offset;
@@ -166,6 +170,9 @@ static gboolean consumeBoundary(CurlContext * curlContext)
 
 		++current;
 	}
+	if (current==lastAvail) {
+		return FALSE; // We need to read more, not an error
+	}
 	if (offset >= maxOffset) {
 		b->offset += offset;
 		if (b->buffer[b->offset]==CR) ++(b->offset);
@@ -173,6 +180,7 @@ static gboolean consumeBoundary(CurlContext * curlContext)
 		curlContext->state=ST_HEADERS;
 		return TRUE;
 	} else {
+		dbgprint("Could not consume boundary\n");
 		curlContext->state=ST_ERROR;
 		return FALSE;
 	}
@@ -187,6 +195,7 @@ static gboolean consumeSubHeader(CurlContext *curlContext)
 			char *endPtr;
 			contentLength = strtol(&line[15], &endPtr, 10);
 			if (endPtr == line) {
+				dbgprint("Could not consume the per frame headers\n");
 				curlContext->state = ST_ERROR;
 				return FALSE;
 			}
@@ -198,10 +207,17 @@ static gboolean consumeSubHeader(CurlContext *curlContext)
 	Buffer *resultPtr = &curlContext->out;
 	if (resultPtr->data == NULL) {
 		resultPtr->data = malloc(contentLength);
-	} else if (contentLength > resultPtr->length || (contentLength < (resultPtr->length / 4))) {
+		resultPtr->buf_size = contentLength;
+	} else if (contentLength > resultPtr->buf_size || (contentLength < (resultPtr->buf_size / 4))) {
 		resultPtr->data = realloc(resultPtr->data, contentLength);
+		if(resultPtr->data ==NULL) {
+			dbgprint("Error reallocating memory from %lu to %lu bytes\n", resultPtr->buf_size, contentLength);
+			curlContext->state = ST_ERROR;
+			return FALSE;
+		}
+		resultPtr->buf_size = contentLength;
 	}
-	resultPtr->length = contentLength;
+	resultPtr->data_length = contentLength;
 
 	curlContext->state = ST_IMG;
 	return TRUE;
@@ -233,7 +249,7 @@ gboolean readBoundary(CurlContext *curlContext)
 	} while (start < end && (*start) == ' ');
 
 	strncpy(curlContext->boundary, start, sizeof(curlContext->boundary));
-	dbgprint("Found boundary: '%s'", curlContext->boundary);
+	dbgprint("Found boundary: '%s'\n", curlContext->boundary);
 
 }
 
@@ -242,7 +258,7 @@ gboolean consumeFrame(CurlContext *curlContext)
 
 	ReadBuffer *b = &curlContext->b;
 	Buffer *resultPtr = &curlContext->out;
-	size_t contentLength = resultPtr->length;
+	size_t contentLength = resultPtr->data_length;
 
 	g_assert(b->recvCount>=contentLength);
 	memcpy(resultPtr->data, b->buffer + b->offset, contentLength);
@@ -255,6 +271,7 @@ gboolean consumeFrame(CurlContext *curlContext)
 
 	if(curlContext->dcContext->jpgCtx->jpg_frames[0].data == NULL) { // Not initialized
 		if (decoder_prepare_video_from_frame(curlContext->dcContext->jpgCtx, resultPtr) == FALSE) {
+			dbgprint("Could not prepare video from frame\n");
 			curlContext->state=ST_ERROR;
 			return FALSE;
 		}
@@ -275,8 +292,8 @@ void sendFrame(CurlContext *curlContext) {
 		}
 	}
 	Buffer *frame = decoder_get_next_frame(jpgCtx);
-	frame->length=curlContext->out.length;
-	memcpy(frame->data, curlContext->out.data, frame->length); // Actually put the JPEG into the buffer
+	frame->data_length=curlContext->out.data_length;
+	memcpy(frame->data, curlContext->out.data, frame->data_length); // Actually put the JPEG into the buffer
 }
 
 size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)
@@ -308,7 +325,7 @@ size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)
 				continueLoop = consumeBoundary(curlContext);
 				break;
 			case ST_IMG:
-				if (b->recvCount-b->offset>=curlContext->out.length) {
+				if (b->recvCount-b->offset>=curlContext->out.data_length) {
 					continueLoop = consumeFrame(curlContext);
 					sendFrame(curlContext);
 					g_assert(curlContext->state == ST_BOUNDARY);
@@ -320,6 +337,14 @@ size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)
 				return 0; // broken
 		}
 
+	}
+	if (! curlContext->dcContext->running) {
+		dbgprint("Stopping video reading because of input request\n");
+		return 0;
+	}
+	if (curlContext->state==ST_ERROR) {
+		dbgprint("Stopping video reading because of error\n");
+		return 0;
 	}
 	return nmemb;
 }
@@ -350,13 +375,14 @@ void *ipcamVideoThreadProc(void *args)
 		.easy = curl_easy_init(),
 		.boundary= "",
 		.dcContext = context
+
 	};
 
 
 	curl_easy_setopt(curlContext.easy, CURLOPT_URL, url);
 	curl_easy_setopt(curlContext.easy, CURLOPT_WRITEFUNCTION, processData);
 	curl_easy_setopt(curlContext.easy, CURLOPT_WRITEDATA, &curlContext);
-	curl_easy_setopt(curlContext.easy, CURLOPT_VERBOSE, 1L);
+//	curl_easy_setopt(curlContext.easy, CURLOPT_VERBOSE, 1L);
 
 //	curl_multi_add_handle(curlContext.multi, curlContext.easy);
 
@@ -365,9 +391,11 @@ void *ipcamVideoThreadProc(void *args)
 	early_out:
 	dbgprint("disconnect\n");
 
-	free(curlContext.b.buffer);
+	FREE_OBJECT(curlContext.b.buffer, free)
+	FREE_OBJECT(curlContext.out.data, free)
 
 	decoder_cleanup(context->jpgCtx);
+	decoder_init(context->jpgCtx, &context->droidcam_output_mode);
 
 	curl_easy_cleanup(curlContext.easy);
 

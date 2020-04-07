@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.15)
 
 project(droidcam)
-set(COMMON_SOURCE src/connection.c src/decoder.c)
-set(CMAKE_C_FLAGS_RELEASE "-march=native -mtune=native -O2 -Wall")
+set(COMMON_SOURCE src/connection.c src/decoder.c src/util.c src/util.h)
+
+set(CMAKE_C_COMPILER clang)
+set(CMAKE_C_FLAGS_DEBUG  "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fsanitize-recover -g -march=native -mtune=native")
+set(CMAKE_C_FLAGS_RELEASE "-march=native -mtune=native -O2 -Wall -march=native -mtune=native")
 set(CMAKE_C_STANDARD 11)
 
 include(FindPkgConfig)
