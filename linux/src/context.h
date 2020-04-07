@@ -6,19 +6,23 @@
 #define DROIDCAM_CONTEXT_H
 
 #include <glib.h>
+#include <memory>
 
 typedef enum _InputMode {
 	IM_DROIDCAM = 0,
 	IM_IPCAM
 } InputMode;
 
-typedef enum _OutputMode {
+enum class OutputMode {
+	OM_MISSING=0,
 	OM_DROIDCAM=1,
 	OM_V4LLOOPBACK=2
-} OutputMode;
+
+};
 
 typedef enum _Callbacks {
-	CB_BUTTON = 0,
+	CB_NONE=0,
+	CB_BUTTON,
 	CB_RADIO_WIFI,
 	CB_RADIO_BTH,
 	CB_RADIO_ADB,
@@ -49,7 +53,7 @@ typedef struct _Settings {
 } Settings;
 
 
-typedef struct _JpgDecContext JpgDecContext;
+class JpgDecContext;
 
 
 typedef struct _Buffer {
@@ -60,17 +64,14 @@ typedef struct _Buffer {
 
 #define JPG_BACKBUF_MAX 10
 
-typedef struct _JpegDecoder {
-	Buffer jpg_frames[JPG_BACKBUF_MAX];
-	JpgDecContext *jpg_decoder;
-} JpgCtx;
-
 typedef struct _DCContext DCContext;
 
 typedef struct _CallbackContext {
 	DCContext *context;
 	Callback cb;
 } CallbackContext;
+
+class JpgCtx;
 
 typedef struct _DCContext {
 	Settings settings;
@@ -94,6 +95,6 @@ typedef struct _ThreadArgs {
 //	int droidcam_output_mode;
 } ThreadArgs;
 
-Callback thread_cmd;
+extern Callback thread_cmd;
 
 #endif //DROIDCAM_CONTEXT_H

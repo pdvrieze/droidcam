@@ -7,14 +7,18 @@
  * Use at your own risk. See README file for more details.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <linux/limits.h>
-#include <sys/stat.h>
-#include <gtk/gtk.h>
-#include <errno.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <climits>
+#include <cerrno>
+extern "C" {
+	#include <sys/stat.h>
+	#include <gtk/gtk.h>
+}
 
+
+#include "droidcam.h"
 #include "common.h"
 #include "connection.h"
 #include "decoder.h"
@@ -27,7 +31,7 @@
 /* Globals */
 GtkWidget *menu;
 GThread *hVideoThread;
-Callback thread_cmd = 0;
+Callback thread_cmd = CB_BUTTON; // doesn't really matter
 int wifi_srvr_mode = 0;
 
 /* Helper Functions */
@@ -232,7 +236,7 @@ void *DroidcamVideoThreadProc(void *args)
 		context = threadArgs->context;
 		jpgCtx = context->jpgCtx;
 
-		free(args);
+		delete args;
 		args = 0;
 	}
 	char buf[32];
@@ -243,16 +247,17 @@ void *DroidcamVideoThreadProc(void *args)
 	server_wait:
 	if (videoSocket == INVALID_SOCKET) {
 		videoSocket = accept_connection(context->settings.port, &(context->running));
-		if (videoSocket == INVALID_SOCKET) { goto early_out; }
+		if (videoSocket == INVALID_SOCKET) {
+			throw DroidcamException("Invalid socket");
+		}
 		keep_waiting = 1;
 	}
 
-	if (context->droidcam_output_mode == 2) {
-		loopback_init(jpgCtx, 1280, 720);
+	if (context->droidcam_output_mode == OutputMode::OM_V4LLOOPBACK) {
+		jpgCtx->loopback_init(1280, 720);
 
-	} else if (context->droidcam_output_mode != 1) {
-		MSG_ERROR("Droidcam not in proper output mode");
-		goto early_out;
+	} else if (context->droidcam_output_mode != OutputMode::OM_DROIDCAM) {
+		throw DroidcamException("Droidcam not in proper output mode");
 	}
 
 	int len = snprintf(buf, sizeof(buf), VIDEO_REQ, decoder_get_video_width(), decoder_get_video_height());
@@ -273,10 +278,10 @@ void *DroidcamVideoThreadProc(void *args)
 	}
 
 	while (context->running) {
-		if (thread_cmd != 0) {
-			int len = sprintf(buf, OTHER_REQ, thread_cmd);
+		if (thread_cmd != CB_NONE) {
+			int len = sprintf(buf, OTHER_REQ, thread_cmd -10);
 			sendToSocket(buf, len, videoSocket);
-			thread_cmd = 0;
+			thread_cmd = CB_NONE;
 		}
 
 		int frameLen;
@@ -345,8 +350,8 @@ accel_callback(GtkAccelGroup *group,
                gpointer user_data)
 {
 	DCContext *context = ((CallbackContext *) user_data)->context;
-	if (context->running == 1 && thread_cmd == 0) {
-		thread_cmd = (Callback) user_data;
+	if (context->running == 1 && thread_cmd == CB_NONE) {
+		thread_cmd = static_cast<Callback>(reinterpret_cast<size_t>(user_data));
 	}
 	return TRUE;
 }
@@ -367,10 +372,10 @@ static void doConnect(DCContext *context)
 		ip = settings->hostName;
 	}
 
-	ThreadArgs *args = malloc(sizeof(ThreadArgs));
+	ThreadArgs *args = new ThreadArgs;
 	(*args) = (ThreadArgs) {0, context};
 
-	if (ip != NULL) // Not Bluetooth or "Server Mode", so connect first
+	if (ip != nullptr) // Not Bluetooth or "Server Mode", so connect first
 	{
 		if (strlen(ip) < 7 || settings->port < 1024) {
 			MSG_ERROR("You must enter the correct IP address (and port) to connect to.");
@@ -429,7 +434,7 @@ static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 		case CB_BUTTON:
 			if (context->running) {
 				doDisconnect(context);
-				cb = (int) context->settings.connection;
+				cb = context->settings.connection;
 				goto _up;
 			} else {// START
 				doConnect(context);
@@ -468,7 +473,7 @@ static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 		case CB_CONTROL_AF   :
 		case CB_CONTROL_LED  :
 			if (context->running == 1 && thread_cmd == 0) {
-				thread_cmd = cb - 10;
+				thread_cmd = cb;
 			}
 			break;
 		case CB_AUDIO: {
@@ -524,12 +529,12 @@ int main(int argc, char *argv[])
 		.settings = {},
 		.button=NULL,
 		.running=FALSE,
-		.droidcam_output_mode=0,
+		.droidcam_output_mode=OutputMode::OM_MISSING,
 		.jpgCtx = &jpgCtx
 	};
 
 
-	if (decoder_init(&jpgCtx, &(context.droidcam_output_mode))) {
+	if (decoder_init(&jpgCtx, context.droidcam_output_mode)) {
 
 		GtkWidget *window;
 		GtkWidget *hbox, *hbox2, *hbox3;
@@ -553,17 +558,17 @@ int main(int argc, char *argv[])
 
 		{
 			GtkAccelGroup *gtk_accel = gtk_accel_group_new();
-			GClosure *closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer) (CB_CONTROL_AF - 10), NULL);
+			GClosure *closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer) (CB_CONTROL_AF - 10), nullptr);
 			gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("a"), GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE, closure);
 
-			closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer) (CB_CONTROL_LED - 10), NULL);
+			closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer) (CB_CONTROL_LED - 10), nullptr);
 			gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("l"), GDK_CONTROL_MASK, GTK_ACCEL_VISIBLE, closure);
 
-			closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer) (CB_CONTROL_ZOUT - 10), NULL);
-			gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("minus"), 0, GTK_ACCEL_VISIBLE, closure);
+			closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer) (CB_CONTROL_ZOUT - 10), nullptr);
+			gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("minus"), static_cast<GdkModifierType>(0), GTK_ACCEL_VISIBLE, closure);
 
-			closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer) (CB_CONTROL_ZIN - 10), NULL);
-			gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("equal"), 0, GTK_ACCEL_VISIBLE, closure);
+			closure = g_cclosure_new(G_CALLBACK(accel_callback), (gpointer) (CB_CONTROL_ZIN - 10), nullptr);
+			gtk_accel_group_connect(gtk_accel, gdk_keyval_from_name("equal"), static_cast<GdkModifierType>(0), GTK_ACCEL_VISIBLE, closure);
 
 			gtk_window_add_accel_group(GTK_WINDOW(window), gtk_accel);
 		}

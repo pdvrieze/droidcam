@@ -15,12 +15,21 @@
 typedef unsigned char BYTE;
 
 
+class JpgCtx {
+public:
+	JpgCtx();
+	~JpgCtx();
+	Buffer jpg_frames[JPG_BACKBUF_MAX];
+	std::unique_ptr<JpgDecContext> jpg_decoder;
+	bool loopback_init(unsigned int width, unsigned int height);
+};
 
-int loopback_init(JpgCtx *jpgCtx, unsigned int width, unsigned int height);
-int decoder_init(JpgCtx *jpgCtx, OutputMode *droidcam_output_mode);
+
+
+bool decoder_init(JpgCtx *jpgCtx, OutputMode &droidcam_output_mode);
 void decoder_fini(JpgCtx *jpgCtx);
 
-int decoder_prepare_video(JpgCtx *jpgCtx, unsigned char *header);
+int decoder_prepare_video(JpgCtx *jpgCtx, char *header);
 int decoder_prepare_video3(JpgCtx *jpgCtx, unsigned int srcWidth, unsigned int srcHeight);
 int decoder_prepare_video_from_frame(JpgCtx *jpgCtx, Buffer *data);
 void decoder_cleanup(JpgCtx *jpgCtx);

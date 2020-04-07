@@ -10,10 +10,11 @@
 #ifndef _COMMON_H_
 #define _COMMON_H_
 
+
+extern void ShowError(const char *title, const char *msg);
+
 #define MSG_ERROR(str)     ShowError("Error",str)
 #define MSG_LASTERROR(str) ShowError(str,strerror(errno))
-
-extern void ShowError();
 
 #define VIDEO_REQ "CMD /v2/video?%dx%d"
 #define OTHER_REQ "CMD /v1/ctl?%d"
