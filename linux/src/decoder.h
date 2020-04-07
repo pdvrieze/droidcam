@@ -34,7 +34,7 @@ public:
 
 	bool prepareVideo(const char *header);
 	bool prepareVideoFromFrame(Buffer *data);
-	bool prepareVideo(unsigned int srcWidth, int srcHeight);
+	bool prepareVideo(unsigned int srcWidth, unsigned int srcHeight);
 
 	void rotate();
 
@@ -45,6 +45,7 @@ public:
 
 public: // TODO make this private
 	Buffer jpg_frames[JPG_BACKBUF_MAX];
+	size_t nextFrame;
 	std::unique_ptr<JpgDecContext> jpg_decoder;
 
 	void publishFrameToLoopback();
@@ -54,10 +55,15 @@ private:
 	OutputMode _outputMode;
 	int _deviceFd;
 	unsigned int _bufferedFramesMax;
+	unsigned int _dstWidth;
+	unsigned int _dstHeight;
 
 	OutputMode findOutputDevice();
 	void query_droidcam_v4l();
 
+	void decodeNextFrame();
+
+	void apply_transform(unsigned char *yuv420image, unsigned char *scratch);
 };
 
 
