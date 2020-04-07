@@ -229,12 +229,12 @@ void *DroidcamVideoThreadProc(void *args)
 {
 	SOCKET videoSocket;
 	DCContext *context;
-	Decoder *jpgCtx;
+	Decoder *decoder;
 	{
 		ThreadArgs *threadArgs = (ThreadArgs *) args;
 		videoSocket = threadArgs->socket;
 		context = threadArgs->context;
-		jpgCtx = context->jpgCtx;
+		decoder = context->decoder;
 
 		delete args;
 		args = 0;
@@ -253,14 +253,14 @@ void *DroidcamVideoThreadProc(void *args)
 		keep_waiting = 1;
 	}
 
-	if (jpgCtx->outputMode() == OutputMode::OM_V4LLOOPBACK) {
-		jpgCtx->initLoopback(1280, 720);
+	if (decoder->outputMode() == OutputMode::OM_V4LLOOPBACK) {
+		decoder->initLoopback(1280, 720);
 
-	} else if (jpgCtx->outputMode() != OutputMode::OM_DROIDCAM) {
+	} else if (decoder->outputMode() != OutputMode::OM_DROIDCAM) {
 		throw DroidcamException("Droidcam not in proper output mode");
 	}
 
-	int len = snprintf(buf, sizeof(buf), VIDEO_REQ, decoder_get_video_width(), decoder_get_video_height());
+	int len = snprintf(buf, sizeof(buf), VIDEO_REQ, decoder->dstWidth(), decoder->dstHeight());
 	if (sendToSocket(buf, len, videoSocket) <= 0) {
 		MSG_ERROR("Error sending request, DroidCam might be busy with another client.");
 		goto early_out;
@@ -273,7 +273,7 @@ void *DroidcamVideoThreadProc(void *args)
 		goto early_out;
 	}
 
-	if (jpgCtx->prepareVideo(buf) == FALSE) {
+	if (decoder->prepareVideo(buf) == FALSE) {
 		goto early_out;
 	}
 
@@ -284,7 +284,7 @@ void *DroidcamVideoThreadProc(void *args)
 			thread_cmd = CB_NONE;
 		}
 
-		Buffer *f = decoder_get_next_frame(jpgCtx);
+		Buffer *f = decoder->getNextFrame();
 		if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
 		unsigned int frameLen = make_int4(buf[0], buf[1], buf[2], buf[3]);
 		f->data_length = frameLen;
@@ -300,7 +300,7 @@ void *DroidcamVideoThreadProc(void *args)
 	early_out:
 	dbgprint("disconnect\n");
 	disconnect(videoSocket);
-	jpgCtx->cleanupJpeg();
+	decoder->cleanupJpeg();
 
 	if (context->running && keep_waiting) {
 		videoSocket = INVALID_SOCKET;
@@ -410,7 +410,7 @@ static void doConnect(DCContext *context)
 	gtk_widget_set_sensitive(GTK_WIDGET(context->ipEntry), FALSE);
 	gtk_widget_set_sensitive(GTK_WIDGET(context->portEntry), FALSE);
 #else
-	decoder_show_test_image(context->jpgCtx, &context->droidcam_output_mode);
+	context->decoder->showTestImage();
 #endif
 }
 
@@ -528,7 +528,7 @@ int main(int argc, char *argv[])
 		.settings = {},
 		.button=NULL,
 		.running=FALSE,
-		.jpgCtx = &decoder
+		.decoder = &decoder
 	};
 
 

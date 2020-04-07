@@ -12,16 +12,22 @@
 
 #include "context.h"
 
-typedef unsigned char BYTE;
-
-
 class Decoder {
 public:
 
 	Decoder();
 	~Decoder();
 
+	unsigned int dstWidth();
+	unsigned int dstHeight();
+
+	unsigned int srcWidth();
+	unsigned int srcHeight();
+
 	OutputMode outputMode() {return _outputMode; };
+
+	unsigned int bufferedFramesMax() { return _bufferedFramesMax; }
+	void bufferedFramesMax(unsigned int newVal);
 
 	bool initLoopback(unsigned int width, unsigned int height);
 	bool init();
@@ -30,45 +36,30 @@ public:
 	bool prepareVideoFromFrame(Buffer *data);
 	bool prepareVideo(unsigned int srcWidth, int srcHeight);
 
+	void rotate();
+
+	Buffer *getNextFrame();
+	void showTestImage();
+
 	void cleanupJpeg();
 
 public: // TODO make this private
 	Buffer jpg_frames[JPG_BACKBUF_MAX];
-	std::unique_ptr<JpgDecContext> jpg_decoder;
+	const JpgDecContext &jpg_decoder;
+	std::unique_ptr<JpgDecContext> _jpg_decoder;
 
 	void publishFrameToLoopback();
+	void setTransform(int transform);
 
 private:
 	OutputMode _outputMode;
-	int deviceFd;
+	int _deviceFd;
+	unsigned int _bufferedFramesMax;
 
 	OutputMode findOutputDevice();
 	void query_droidcam_v4l();
+
 };
-
-
-Buffer * decoder_get_next_frame(Decoder *jpgCtx);
-
-void decoder_set_video_delay(Decoder *jpgCtx, unsigned v);
-unsigned int decoder_get_video_width();
-unsigned int decoder_get_video_height();
-void decoder_rotate(Decoder *jpgCtx);
-void decoder_show_test_image(Decoder *jpgCtx, const OutputMode *droidcam_output_mode);
-
-void decoder_source_dimensions(Decoder *jpgCtx, unsigned int *width, unsigned int *height);
-
-/* 20ms 16hkz 16 bit */
-#define DROIDCAM_CHUNK_MS_2           20
-#define DROIDCAM_SPX_CHUNK_BYTES_2    70
-#define DROIDCAM_PCM_CHUNK_BYTES_2    640
-#define DROIDCAM_PCM_CHUNK_SAMPLES_2  320
-
-#define DROIDCAM_SPEEX_BACKBUF_MAX_COUNT 2
-
-#define FORMAT_C 0
-
-#define VIDEO_FMT_DROIDCAM 3
-#define VIDEO_FMT_DROIDCAMX 18
 
 
 #endif

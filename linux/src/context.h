@@ -83,7 +83,7 @@ typedef struct _DCContext {
 	GtkWidget *mode_ipcam;
 	GtkWidget *mode_droidcam;
 	gboolean running;
-	Decoder * jpgCtx;
+	Decoder * decoder;
 	CallbackContext callbackData[20];
 } DCContext;
 

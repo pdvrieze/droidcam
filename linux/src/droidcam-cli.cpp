@@ -50,7 +50,7 @@ server_wait:
     }
 
     {
-        int len = snprintf(buf, sizeof(buf), VIDEO_REQ, decoder_get_video_width(), decoder_get_video_height());
+        int len = snprintf(buf, sizeof(buf), VIDEO_REQ, context->decoder->dstWidth(), context->decoder->dstHeight());
         if (sendToSocket(buf, len, videoSocket) <= 0){
             MSG_ERROR("Error sending request, DroidCam might be busy with another client.");
             goto early_out;
@@ -63,12 +63,12 @@ server_wait:
         goto early_out;
     }
 
-    if (context->jpgCtx->prepareVideo(buf) == FALSE) {
+    if (context->decoder->prepareVideo(buf) == FALSE) {
         goto early_out;
     }
 
     while (1){
-        Buffer *f = decoder_get_next_frame(context->jpgCtx);
+        Buffer *f = context->decoder->getNextFrame();
         if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
         unsigned int frameLen = make_int4(buf[0], buf[1], buf[2], buf[3]);
         f->data_length = frameLen;
@@ -84,7 +84,7 @@ server_wait:
 early_out:
     dbgprint("disconnect\n");
     disconnect(videoSocket);
-    context->jpgCtx->cleanupJpeg();
+    context->decoder->cleanupJpeg();
 
     if (keep_waiting){
         videoSocket = INVALID_SOCKET;

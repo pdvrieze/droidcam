@@ -273,8 +273,8 @@ gboolean consumeFrame(CurlContext *curlContext)
 		b->offset = 0;
 	}
 
-	if (curlContext->dcContext->jpgCtx->jpg_frames[0].data == nullptr) { // Not initialized
-		if (curlContext->dcContext->jpgCtx->prepareVideoFromFrame(resultPtr) == FALSE) {
+	if (curlContext->dcContext->decoder->jpg_frames[0].data == nullptr) { // Not initialized
+		if (curlContext->dcContext->decoder->prepareVideoFromFrame(resultPtr) == FALSE) {
 			dbgprint("Could not prepare video from frame\n");
 			curlContext->state = ST_ERROR;
 			return FALSE;
@@ -287,16 +287,17 @@ gboolean consumeFrame(CurlContext *curlContext)
 
 void sendFrame(CurlContext *curlContext)
 {
-	Decoder *jpgCtx = curlContext->dcContext->jpgCtx;
-	if (jpgCtx->outputMode() == OutputMode::OM_V4LLOOPBACK) {
-		unsigned int width, height;
-		decoder_source_dimensions(jpgCtx, &width, &height);
-		if (width != decoder_get_video_width() || height != decoder_get_video_height()) {
+	Decoder *decoder = curlContext->dcContext->decoder;
+	if (decoder->outputMode() == OutputMode::OM_V4LLOOPBACK) {
+		unsigned int srcWidth = decoder->srcWidth();
+		unsigned int srcHeight = decoder->srcHeight();
+
+		if (srcWidth != decoder->dstWidth() || srcHeight != decoder->dstHeight()) {
 			// If the size changed, reinitialize (not clear that this can happen)
-			jpgCtx->initLoopback(width, height);
+			decoder->initLoopback(srcWidth, srcHeight);
 		}
 	}
-	Buffer *frame = decoder_get_next_frame(jpgCtx);
+	Buffer *frame = decoder->getNextFrame();
 	frame->data_length = curlContext->out.data_length;
 	memcpy(frame->data, curlContext->out.data, frame->data_length); // Actually put the JPEG into the buffer
 }
@@ -397,9 +398,9 @@ void *ipcamVideoThreadProc(void *args)
 	FREE_OBJECT(curlContext.b.buffer, free)
 	FREE_OBJECT(curlContext.out.data, free)
 
-	context->jpgCtx->cleanupJpeg();
+	context->decoder->cleanupJpeg();
 	bool result;
-	result = context->jpgCtx->init();
+	result = context->decoder->init();
 
 	curl_easy_cleanup(curlContext.easy);
 
