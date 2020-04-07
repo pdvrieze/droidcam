@@ -26,13 +26,28 @@ extern void ShowError(const char *title, const char *msg);
 
 #define CSTR_LEN(x) (sizeof(x)-1)
 
-#define make_int(num, b1, b2)	num = 0; num |=(b1&0xFF); num <<= 8; num |= (b2&0xFF);
-#define make_int4(num, b0, b1, b2, b3) \
-    num = 0; \
-    num |= (b3&0xFF); num <<= 8; \
-    num |= (b2&0xFF); num <<= 8; \
-    num |= (b1&0xFF); num <<= 8; \
-    num |= (b0&0xFF)
+inline unsigned int make_int(unsigned char b1, unsigned char b2)
+{
+    unsigned int r;
+    r = 0u;
+    r |= (b1 & 0xFFu);
+    r <<= 8u;
+    r |= (b2 & 0xFFu);
+    return r;
+}
+
+inline unsigned int make_int4(unsigned char b0, unsigned char b1, unsigned char b2, unsigned char b3)
+{
+    unsigned int r = 0u;
+    r |= (b3 & 0xFFu);
+    r <<= 8u;
+    r |= (b2 & 0xFFu);
+    r <<= 8u;
+    r |= (b1 & 0xFFu);
+    r <<= 8u;
+    r |= (b0 & 0xFFu);
+    return r;
+}
 
 #define errprint(...) fprintf(stderr, __VA_ARGS__)
 #define voidprint(...) /* */

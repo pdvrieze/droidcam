@@ -63,16 +63,15 @@ server_wait:
         goto early_out;
     }
 
-    if (decoder_prepare_video(context->jpgCtx, buf) == FALSE) {
+    if (context->jpgCtx->prepareVideo(buf) == FALSE) {
         goto early_out;
     }
 
     while (1){
-        int frameLen;
-        struct jpg_frame_s *f = decoder_get_next_frame(context->jpgCtx);
+        Buffer *f = decoder_get_next_frame(context->jpgCtx);
         if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
-        make_int4(frameLen, buf[0], buf[1], buf[2], buf[3]);
-        f->length = frameLen;
+        unsigned int frameLen = make_int4(buf[0], buf[1], buf[2], buf[3]);
+        f->data_length = frameLen;
         char *p = (char*)f->data;
         while (frameLen > 4096) {
             if (recvFromSocket(p, 4096, videoSocket) == FALSE) goto early_out;
@@ -126,7 +125,7 @@ int main(int argc, char *argv[]) {
     Decoder decoder;
     OutputMode outputMode =OutputMode::OM_DROIDCAM;
 
-	if (!(&decoder)->decoder_init()) {
+	if (!(&decoder)->init()) {
         return 2;
     }
     stream_video(&settings);

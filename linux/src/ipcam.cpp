@@ -274,7 +274,7 @@ gboolean consumeFrame(CurlContext *curlContext)
 	}
 
 	if (curlContext->dcContext->jpgCtx->jpg_frames[0].data == nullptr) { // Not initialized
-		if (decoder_prepare_video_from_frame(curlContext->dcContext->jpgCtx, resultPtr) == FALSE) {
+		if (curlContext->dcContext->jpgCtx->prepareVideoFromFrame(resultPtr) == FALSE) {
 			dbgprint("Could not prepare video from frame\n");
 			curlContext->state = ST_ERROR;
 			return FALSE;
@@ -293,7 +293,7 @@ void sendFrame(CurlContext *curlContext)
 		decoder_source_dimensions(jpgCtx, &width, &height);
 		if (width != decoder_get_video_width() || height != decoder_get_video_height()) {
 			// If the size changed, reinitialize (not clear that this can happen)
-			jpgCtx->loopback_init(width, height);
+			jpgCtx->initLoopback(width, height);
 		}
 	}
 	Buffer *frame = decoder_get_next_frame(jpgCtx);
@@ -399,7 +399,7 @@ void *ipcamVideoThreadProc(void *args)
 
 	decoder_cleanup(context->jpgCtx);
 	bool result;
-	result = context->jpgCtx->decoder_init();
+	result = context->jpgCtx->init();
 
 	curl_easy_cleanup(curlContext.easy);
 

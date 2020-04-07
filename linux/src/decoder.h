@@ -23,21 +23,28 @@ public:
 
 	OutputMode outputMode() {return _outputMode; };
 
-	bool loopback_init(unsigned int width, unsigned int height);
-	bool decoder_init();
+	bool initLoopback(unsigned int width, unsigned int height);
+	bool init();
+
+	bool prepareVideo(const char *header);
+	bool prepareVideoFromFrame(Buffer *data);
+	bool prepareVideo(unsigned int srcWidth, int srcHeight);
 
 public: // TODO make this private
 	Buffer jpg_frames[JPG_BACKBUF_MAX];
 	std::unique_ptr<JpgDecContext> jpg_decoder;
 
+	void publishFrameToLoopback();
+
 private:
 	OutputMode _outputMode;
+	int deviceFd;
+
+	OutputMode findOutputDevice();
+	void query_droidcam_v4l();
 };
 
 
-int decoder_prepare_video(Decoder *jpgCtx, char *header);
-int decoder_prepare_video3(Decoder *jpgCtx, unsigned int srcWidth, unsigned int srcHeight);
-int decoder_prepare_video_from_frame(Decoder *jpgCtx, Buffer *data);
 void decoder_cleanup(Decoder *jpgCtx);
 
 Buffer * decoder_get_next_frame(Decoder *jpgCtx);

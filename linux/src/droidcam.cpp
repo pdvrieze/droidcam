@@ -254,7 +254,7 @@ void *DroidcamVideoThreadProc(void *args)
 	}
 
 	if (jpgCtx->outputMode() == OutputMode::OM_V4LLOOPBACK) {
-		jpgCtx->loopback_init(1280, 720);
+		jpgCtx->initLoopback(1280, 720);
 
 	} else if (jpgCtx->outputMode() != OutputMode::OM_DROIDCAM) {
 		throw DroidcamException("Droidcam not in proper output mode");
@@ -273,7 +273,7 @@ void *DroidcamVideoThreadProc(void *args)
 		goto early_out;
 	}
 
-	if (decoder_prepare_video(jpgCtx, buf) == FALSE) {
+	if (jpgCtx->prepareVideo(buf) == FALSE) {
 		goto early_out;
 	}
 
@@ -284,10 +284,9 @@ void *DroidcamVideoThreadProc(void *args)
 			thread_cmd = CB_NONE;
 		}
 
-		int frameLen;
 		Buffer *f = decoder_get_next_frame(jpgCtx);
 		if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
-		make_int4(frameLen, buf[0], buf[1], buf[2], buf[3]);
+		unsigned int frameLen = make_int4(buf[0], buf[1], buf[2], buf[3]);
 		f->data_length = frameLen;
 		char *p = (char *) f->data;
 		while (frameLen > 4096) {
@@ -533,7 +532,7 @@ int main(int argc, char *argv[])
 	};
 
 
-	if ((&decoder)->decoder_init()) {
+	if ((&decoder)->init()) {
 
 		GtkWidget *window;
 		GtkWidget *hbox, *hbox2, *hbox3;
