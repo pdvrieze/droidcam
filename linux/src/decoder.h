@@ -45,8 +45,7 @@ public:
 
 public: // TODO make this private
 	Buffer jpg_frames[JPG_BACKBUF_MAX];
-	const JpgDecContext &jpg_decoder;
-	std::unique_ptr<JpgDecContext> _jpg_decoder;
+	std::unique_ptr<JpgDecContext> jpg_decoder;
 
 	void publishFrameToLoopback();
 	void setTransform(int transform);
