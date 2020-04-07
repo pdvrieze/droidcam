@@ -21,9 +21,11 @@ int decoder_init(JpgCtx *jpgCtx, OutputMode *droidcam_output_mode);
 void decoder_fini(JpgCtx *jpgCtx);
 
 int decoder_prepare_video(JpgCtx *jpgCtx, unsigned char *header);
+int decoder_prepare_video3(JpgCtx *jpgCtx, unsigned int srcWidth, unsigned int srcHeight);
+int decoder_prepare_video_from_frame(JpgCtx *jpgCtx, Buffer *data);
 void decoder_cleanup(JpgCtx *jpgCtx);
 
-JpgFrame * decoder_get_next_frame(JpgCtx *jpgCtx);
+Buffer * decoder_get_next_frame(JpgCtx *jpgCtx);
 
 void decoder_set_video_delay(JpgCtx *jpgCtx, unsigned v);
 unsigned int decoder_get_video_width();

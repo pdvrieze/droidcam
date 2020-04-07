@@ -31,7 +31,7 @@ typedef struct _CallbackContext {
 /* Globals */
 GtkWidget *menu;
 GThread *hVideoThread;
-int thread_cmd = 0;
+Callbacks thread_cmd = 0;
 int wifi_srvr_mode = 0;
 
 /* Helper Functions */
@@ -284,7 +284,7 @@ void *DroidcamVideoThreadProc(void *args)
 		}
 
 		int frameLen;
-		struct jpg_frame_s *f = decoder_get_next_frame(jpgCtx);
+		Buffer *f = decoder_get_next_frame(jpgCtx);
 		if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
 		make_int4(frameLen, buf[0], buf[1], buf[2], buf[3]);
 		f->length = frameLen;
@@ -350,7 +350,7 @@ accel_callback(GtkAccelGroup *group,
 {
 	DCContext *context = ((CallbackContext *) user_data)->context;
 	if (context->running == 1 && thread_cmd == 0) {
-		thread_cmd = (int) user_data;
+		thread_cmd = (Callbacks) user_data;
 	}
 	return TRUE;
 }
@@ -404,7 +404,7 @@ static void doConnect(DCContext *context)
 	}
 
 
-	gtk_button_set_label(context->button, "Stop");
+	gtk_button_set_label(GTK_BUTTON(context->button), "Stop");
 	//gtk_widget_set_sensitive(GTK_WIDGET(settings->button), FALSE);
 
 	gtk_widget_set_sensitive(GTK_WIDGET(context->ipEntry), FALSE);

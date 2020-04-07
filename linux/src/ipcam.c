@@ -13,25 +13,35 @@
 #include <curl/curl.h>
 #include <string.h>
 
-typedef struct _CurlContext {
-	CURL *curl;
-	curl_socket_t socket;
-	gboolean *running;
-} CurlContext;
+typedef enum _State {
+	ST_INIT, // nothing done
+	ST_BOUNDARY, // Waiting to read the boundary
+	ST_HEADERS, // Waiting to read/process sub headers
+	ST_IMG, // Part read the image
+	ST_ERROR, // Some error occured. Shut down the processing
+} State;
 
-typedef struct _FlexBuffer {
-	unsigned char *buffer;
-	size_t size;
-} FlexBuffer;
 
-typedef struct {
+typedef struct _ReadBuffer {
 	unsigned char *buffer;
 	size_t maxSize;
 	size_t offset;
 	size_t recvCount;
 } ReadBuffer;
 
-static const int BUFSIZE = 4 * 1024;
+typedef struct _CurlContext {
+	CURL *easy;
+	CURLM *multi;
+	curl_socket_t socket;
+	DCContext *dcContext;
+	char boundary[256];
+	State state;
+	ReadBuffer b;
+	Buffer out;
+} CurlContext;
+
+static const int BUFSIZE = 32 * 1024;
+static const int LINESIZE = 1 * 1024;
 static const int FRAME_MAX = 4 * 1024;
 static const char CR = 13;
 static const char LF = 10;
@@ -39,7 +49,7 @@ static const char CRLF[] = {CR, LF};
 
 gboolean startsWith(const char *haystack, const char *needle)
 {
-	return strncmp(needle, haystack, strlen(needle)) == 0;
+	return haystack != NULL && strncmp(needle, haystack, strlen(needle)) == 0;
 }
 
 static int wait_on_recv_socket(curl_socket_t sockfd, long timeout_ms)
@@ -51,7 +61,7 @@ static int wait_on_recv_socket(curl_socket_t sockfd, long timeout_ms)
 	FD_SET(sockfd, &errFds);
 
 	struct timeval tv = {.tv_sec=timeout_ms / 1000, .tv_usec=(timeout_ms % 1000) * 1000};
-	return select(1, &inFds, NULL, &errFds, &tv);
+	return select(sockfd + 1, &inFds, NULL, &errFds, &tv);
 }
 
 static size_t min(size_t a, size_t b)
@@ -59,14 +69,38 @@ static size_t min(size_t a, size_t b)
 	return a < b ? a : b;
 }
 
-static gboolean readIntoBuffer(ReadBuffer *b, CurlContext *curlContext, const char *boundary, const gboolean *running) {
+static size_t max(size_t a, size_t b)
+{
+	return a > b ? a : b;
+}
+
+static gboolean readIntoBuffer(ReadBuffer *b, const char *data, size_t size)
+{
+	if (b->buffer!=NULL) {
+		b->recvCount -= b->offset;
+		memmove(b->buffer, b->buffer + b->offset, b->recvCount);
+	}
 	b->offset = 0;
-	while (*running && b->recvCount<4+strlen(boundary))
-	{
+	size_t needed_size = b->recvCount + size;
+	if (needed_size > b->maxSize) {
+		size_t s = max(b->maxSize, 1024);
+		while (s < needed_size) { s <<= 1; }
+		b->buffer = realloc(b->buffer, s);
+		b->maxSize=s;
+	}
+	memcpy(b->buffer + b->recvCount, data, size);
+	b->recvCount += size;
+	return TRUE;
+}
+
+static gboolean readIntoBuffer_Old(ReadBuffer *b, CurlContext *curlContext, size_t minRecv)
+{
+	while (curlContext->dcContext->running && b->recvCount < minRecv) {
 		// Read first buffer content
 		size_t recvCount;
-		CURLcode res = curl_easy_recv(curlContext->curl, b->buffer + b->recvCount, b->maxSize-b->recvCount, &recvCount);
-		while (res == CURLE_AGAIN && *running) {
+		CURLcode res = curl_easy_recv(curlContext->easy, b->buffer + b->recvCount, b->maxSize - b->recvCount,
+		                              &recvCount);
+		while (res == CURLE_AGAIN && curlContext->dcContext->running) {
 			int retval = wait_on_recv_socket(curlContext->socket, 250);// quarter of a second
 
 			if (retval == -1) {
@@ -74,36 +108,45 @@ static gboolean readIntoBuffer(ReadBuffer *b, CurlContext *curlContext, const ch
 				return FALSE;
 			}
 
-			if (retval && *running) {
-				res = curl_easy_recv(curlContext->curl, b->buffer + b->recvCount, b->maxSize-b->recvCount, &recvCount);
+			if (retval && curlContext->dcContext->running) {
+				res = curl_easy_recv(curlContext->easy, b->buffer + b->recvCount, b->maxSize - b->recvCount,
+				                     &recvCount);
 			}
 		}
-		if (res==CURLE_OK) {
-			b->recvCount+=recvCount;
+		if (res == CURLE_OK) {
+			b->recvCount += recvCount;
 		}
 	}
 	return TRUE;
 }
 
-static unsigned char *consumeLine(unsigned char *buffer, size_t max_buf, char *line, size_t maxLine)
+static gboolean consumeLine(CurlContext *curlContext, char *line, size_t maxLine)
 {
-	unsigned char *last = buffer + max_buf - 1; // extra space for LF
+	ReadBuffer *b = &(curlContext->b);
+	unsigned char *last = b->buffer + b->recvCount - 1; // extra space for LF
 	unsigned char *cur;
-	for (cur = buffer; cur < last && (cur[0] != CR || cur[1] != LF); ++cur) {}
+	for (cur = b->buffer + b->offset; cur < last && (cur[0] != CR || cur[1] != LF); ++cur) {}
 	if (cur[0] == CR && cur[1] == LF) {
-		size_t n = min(cur - buffer, maxLine - 1);
-		strncpy(line, (char *) buffer, n);
-		buffer[n] = 0; // ensure terminating 0
-		return cur + 2; // skip CRLF
+		size_t n = min(cur - b->buffer, maxLine - 1);
+		strncpy(line, (char *) b->buffer + b->offset, n);
+		line[n - b->offset] = 0; // ensure terminating 0
+		b->offset = cur - b->buffer + 2; // add 2 to skip CR/LF
+		return TRUE; // skip CRLF
 	} else {
-		return buffer; // no move
+		return FALSE; // no move
 	}
 }
 
-static gboolean consumeBoundary(ReadBuffer *b, const char *boundary)
+static gboolean consumeBoundary(CurlContext * curlContext)
 {
+	ReadBuffer *b = &curlContext->b;
+	const char *boundary = curlContext->boundary;
 	size_t maxOffset = 2 + strlen(boundary);
+
 	const unsigned char *current = b->buffer + b->offset;
+
+	if (startsWith(current, CRLF)) {current+=2;} // skip newline
+
 	size_t offset = 0;
 
 	while (offset < maxOffset && current < (b->buffer + b->recvCount - maxOffset + offset)) {
@@ -125,207 +168,208 @@ static gboolean consumeBoundary(ReadBuffer *b, const char *boundary)
 	}
 	if (offset >= maxOffset) {
 		b->offset += offset;
+		if (b->buffer[b->offset]==CR) ++(b->offset);
+		if (b->buffer[b->offset]==LF) ++(b->offset);
+		curlContext->state=ST_HEADERS;
 		return TRUE;
 	} else {
+		curlContext->state=ST_ERROR;
 		return FALSE;
 	}
 }
 
-static gboolean consumeSubHeader(ReadBuffer *b, long *content_length)
+static gboolean consumeSubHeader(CurlContext *curlContext)
 {
-	unsigned char *bufCur = b->buffer + b->offset;
-	unsigned char *bufEnd = b->buffer + b->recvCount;
-	unsigned char *bufNext;
-	char line[BUFSIZE];
-	for (
-		bufNext = consumeLine(bufCur, bufEnd - bufCur, line, BUFSIZE);
-		bufNext != bufCur && line[0] != 0;
-		bufNext = consumeLine(bufCur, bufEnd - bufCur, line, BUFSIZE)) {
-
+	size_t contentLength = 0;
+	char line[LINESIZE];
+	while (consumeLine(curlContext, line, sizeof(line)) && line[0] != 0) {
 		if (startsWith(line, "Content-Length:")) {
 			char *endPtr;
-			*content_length = strtol(&line[15], &endPtr, 10);
+			contentLength = strtol(&line[15], &endPtr, 10);
+			if (endPtr == line) {
+				curlContext->state = ST_ERROR;
+				return FALSE;
+			}
 		}
-
-		bufCur = bufNext;
 	}
-	if (bufCur == bufNext) { // error, set invalid content length, don't move
-		*content_length = -1;
+	if (line[0] != 0) { // We didn't read the entire header yet
 		return FALSE;
 	}
-	b->offset = bufNext - b->buffer;
+	Buffer *resultPtr = &curlContext->out;
+	if (resultPtr->data == NULL) {
+		resultPtr->data = malloc(contentLength);
+	} else if (contentLength > resultPtr->length || (contentLength < (resultPtr->length / 4))) {
+		resultPtr->data = realloc(resultPtr->data, contentLength);
+	}
+	resultPtr->length = contentLength;
+
+	curlContext->state = ST_IMG;
 	return TRUE;
 }
 
-
-gboolean readFrame(ReadBuffer *b, CurlContext *curlContext, size_t contentLength, FlexBuffer *resultPtr)
+gboolean readBoundary(CurlContext *curlContext)
 {
-	if (resultPtr->buffer == NULL) {
-		resultPtr->buffer = malloc(contentLength);
-		resultPtr->size = contentLength;
-	} else if (contentLength > resultPtr->size || (contentLength < (resultPtr->size / 4))) {
-		resultPtr->buffer = realloc(resultPtr->buffer, contentLength);
-		resultPtr->size = b->buffer != NULL ? contentLength : 0;
+	char *contentType;
+	CURLcode res = curl_easy_getinfo(curlContext->easy, CURLINFO_CONTENT_TYPE, &contentType);
+	if (res != CURLE_OK) { return 0; }
+	if (!startsWith(contentType, "multipart/x-mixed-replace;")) {
+		MSG_ERROR("Unexpected content type in ipcam");
+		return FALSE;
 	}
 
-	// Short circuit if the entire image exists in the header buffer
-	if (contentLength<b->recvCount-b->offset) {
-		memcpy(resultPtr->buffer, b->buffer + b->offset, contentLength);
-		memmove(b->buffer, b->buffer+b->offset, contentLength);
-		b->recvCount-=contentLength;
-		b->offset=0;
-		return TRUE;
+	char *start = strstr(contentType, "boundary");
+	char *end = start + strlen(start);
+	if (start == NULL) {
+		MSG_ERROR("Missing boundary");
+		return FALSE;
 	}
-
-	memcpy(resultPtr->buffer, b->buffer + b->offset, b->recvCount - b->offset);
-	size_t offset = b->recvCount - b->offset;
-	size_t recvCnt;
-
-	while (*(curlContext->running) && offset < contentLength) {
-		CURLcode res = curl_easy_recv(curlContext->curl, resultPtr->buffer + offset, contentLength - offset, &recvCnt);
-		while (res == CURLE_AGAIN) {
-			wait_on_recv_socket(curlContext->socket, 250);
-			res = curl_easy_recv(curlContext->curl, resultPtr->buffer + offset, contentLength - offset, &recvCnt);
-			if (!curlContext->running) return FALSE; // early out
-		}
-
-		offset += recvCnt;
+	for (start += 8; *start == ' ' && (start < end); ++start) {}
+	if (*start != '=') {
+		MSG_ERROR("No equals for boundary");
+		return FALSE;
 	}
+	do {
+		++start;
+	} while (start < end && (*start) == ' ');
 
-	b->offset=0;
-	b->recvCount=0;
+	strncpy(curlContext->boundary, start, sizeof(curlContext->boundary));
+	dbgprint("Found boundary: '%s'", curlContext->boundary);
 
-	if (offset == contentLength) { return TRUE; }
-
-	return FALSE;
 }
 
+gboolean consumeFrame(CurlContext *curlContext)
+{
+
+	ReadBuffer *b = &curlContext->b;
+	Buffer *resultPtr = &curlContext->out;
+	size_t contentLength = resultPtr->length;
+
+	g_assert(b->recvCount>=contentLength);
+	memcpy(resultPtr->data, b->buffer + b->offset, contentLength);
+	b->offset += contentLength;
+	if (b->recvCount > b->offset) {
+		memmove(b->buffer, b->buffer + b->offset, b->recvCount-b->offset);
+		b->recvCount -= contentLength;
+		b->offset = 0;
+	}
+
+	if(curlContext->dcContext->jpgCtx->jpg_frames[0].data == NULL) { // Not initialized
+		if (decoder_prepare_video_from_frame(curlContext->dcContext->jpgCtx, resultPtr) == FALSE) {
+			curlContext->state=ST_ERROR;
+			return FALSE;
+		}
+	}
+
+	curlContext->state=ST_BOUNDARY; // now look for boundary again
+	return TRUE;
+}
+
+void sendFrame(CurlContext *curlContext) {
+	JpgCtx *jpgCtx = curlContext->dcContext->jpgCtx;
+	if (curlContext->dcContext->droidcam_output_mode == OM_V4LLOOPBACK) {
+		unsigned int width, height;
+		decoder_source_dimensions(jpgCtx, &width, &height);
+		if (width != decoder_get_video_width() || height != decoder_get_video_height()) {
+			// If the size changed, reinitialize (not clear that this can happen)
+			loopback_init(jpgCtx, width, height);
+		}
+	}
+	Buffer *frame = decoder_get_next_frame(jpgCtx);
+	frame->length=curlContext->out.length;
+	memcpy(frame->data, curlContext->out.data, frame->length); // Actually put the JPEG into the buffer
+}
+
+size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)
+{
+	g_assert(size == 1);
+	CurlContext *curlContext = userdata;
+	if (curlContext->boundary[0] == 0) {
+		g_assert(curlContext->state == ST_INIT);
+		readBoundary(curlContext);
+		curlContext->state = ST_BOUNDARY;
+	}
+	ReadBuffer *b = &curlContext->b;
+
+	readIntoBuffer(b, ptr, nmemb);
+
+	gboolean continueLoop = TRUE;
+	while (continueLoop &&
+	       b->offset < b->recvCount &&
+	       curlContext->state != ST_ERROR &&
+	       curlContext->dcContext->running) {
+
+		switch (curlContext->state) {
+			case ST_INIT: // we shouldn't be in this state
+				return 0;
+			case ST_HEADERS:
+				continueLoop = consumeSubHeader(curlContext);
+				break;
+			case ST_BOUNDARY:
+				continueLoop = consumeBoundary(curlContext);
+				break;
+			case ST_IMG:
+				if (b->recvCount-b->offset>=curlContext->out.length) {
+					continueLoop = consumeFrame(curlContext);
+					sendFrame(curlContext);
+					g_assert(curlContext->state == ST_BOUNDARY);
+				} else {
+					continueLoop = FALSE; // no full image
+				}
+				break;
+			default:
+				return 0; // broken
+		}
+
+	}
+	return nmemb;
+}
 
 void *ipcamVideoThreadProc(void *args)
 {
 	DCContext *context;
 	Settings *settings;
-	JpgCtx *jpgCtx;
 	{
 		ThreadArgs *threadargs = (ThreadArgs *) args;
 		context = threadargs->context;
 		settings = &(context->settings);
-		jpgCtx = context->jpgCtx;
 		free(args);
 		args = 0;
 	}
+
+	dbgprint("Video Thread Started\n");
+	context->running = 1;
+
+
 	char url[256];
 	snprintf(url, 255, "http://%s:%d/video", settings->hostName, settings->port);
 
 	if (curl_global_init(CURL_GLOBAL_NOTHING)) { return 0; }
 
 
-	CurlContext curlContext;
-	curlContext.curl = curl_easy_init();
-	curlContext.running = &(context->running);
+	CurlContext curlContext = {
+		.easy = curl_easy_init(),
+		.boundary= "",
+		.dcContext = context
+	};
 
 
-	curl_easy_setopt(curlContext.curl, CURLOPT_URL, url);
-//	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeFunc);
-//	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &curlContext);
-	curl_easy_setopt(curlContext.curl, CURLOPT_CONNECT_ONLY, 1L);
-	curl_easy_setopt(curlContext.curl, CURLOPT_VERBOSE, 1L);
+	curl_easy_setopt(curlContext.easy, CURLOPT_URL, url);
+	curl_easy_setopt(curlContext.easy, CURLOPT_WRITEFUNCTION, processData);
+	curl_easy_setopt(curlContext.easy, CURLOPT_WRITEDATA, &curlContext);
+	curl_easy_setopt(curlContext.easy, CURLOPT_VERBOSE, 1L);
 
-	if (curl_easy_perform(curlContext.curl) == CURLE_OK) {
-		char *contentType;
-		{
-			CURLcode res = curl_easy_getinfo(curlContext.curl, CURLINFO_CONTENT_TYPE, &contentType);
-			if (res != CURLE_OK) { goto early_out; }
-		}
-		if (contentType != NULL) { printf("Content-Type: %s\n", contentType); }
+//	curl_multi_add_handle(curlContext.multi, curlContext.easy);
 
-		if (!startsWith(contentType, "multipart/x-mixed-replace;")) {
-			MSG_ERROR("Unexpected content type in ipcam");
-			goto early_out;
-		}
-
-		char *start = strstr(contentType, "boundary");
-		char *end = start + strlen(start);
-		if (start == NULL) {
-			MSG_ERROR("Missing boundary");
-			goto early_out;
-		}
-		for (start += 8; *start == ' ' && (start < end); ++start) {}
-		if (*start != '=') {
-			MSG_ERROR("No equals for boundary");
-			goto early_out;
-		}
-		while (start < end && (*start) == ' ') { ++start; }
-
-		char *boundary = start;
-		printf("Found boundary: '%s'", boundary);
-
-		{
-			CURLcode res = curl_easy_getinfo(curlContext.curl, CURLINFO_ACTIVESOCKET, &curlContext.socket);
-			if (res != CURLE_OK) {
-				MSG_ERROR("Could not determine socket");
-				goto early_out;
-			}
-		}
-
-		unsigned char _buffer[BUFSIZE];
-		ReadBuffer b = {.buffer=_buffer, .maxSize=sizeof(_buffer)};
-
-		if (!readIntoBuffer(&b, &curlContext, boundary, &context->running)) goto early_out;
-
-		if (!consumeBoundary(&b, boundary)) { MSG_ERROR("error consuming boundary"); goto early_out; }
-
-		long contentLength;
-
-		if (!consumeSubHeader(&b, &contentLength)) { MSG_ERROR("Could not consume any jpeg"); goto early_out; }
-
-		FlexBuffer frame = {NULL, 0};
-		if (!readFrame(&b, &curlContext, (unsigned long) contentLength,
-		               &frame)) { goto early_out; };
-
-		if (!decoder_prepare_video(jpgCtx, frame.buffer)) {
-			MSG_ERROR("Could not decode jpeg");
-			goto early_out;
-		}
-
-		if (context->droidcam_output_mode == OM_V4LLOOPBACK) {
-			unsigned int width, height;
-			decoder_source_dimensions(jpgCtx, &width, &height);
-			loopback_init(jpgCtx, width, height); // init with actual image size in the non-droidcam loopback mode
-		}
-
-
-		decoder_get_next_frame(jpgCtx);
-
-		while (context->running) {
-
-			if(!consumeBoundary(&b, boundary)) { goto early_out; };
-			if(!consumeSubHeader(&b, &contentLength)) { MSG_ERROR("Could not decode jpeg correctly"); goto early_out; };
-
-			if (!readFrame(&b, &curlContext, contentLength, &frame)) { goto early_out; }
-
-			if (context->droidcam_output_mode == OM_V4LLOOPBACK) {
-				unsigned int width, height;
-				decoder_source_dimensions(jpgCtx, &width, &height);
-				if (width != decoder_get_video_width() || height != decoder_get_video_height()) {
-					// If the size changed, reinitialize (not clear that this can happen)
-					loopback_init(jpgCtx, width, height);
-				}
-			}
-			decoder_get_next_frame(jpgCtx);
-		}
-
-	} else {
-		MSG_ERROR("Could not connect with ipcam");
-	}
+	CURLcode res = curl_easy_perform(curlContext.easy);
 
 	early_out:
 	dbgprint("disconnect\n");
+
+	free(curlContext.b.buffer);
+
 	decoder_cleanup(context->jpgCtx);
 
-	connection_cleanup();
-
-	curl_easy_cleanup(curlContext.curl);
+	curl_easy_cleanup(curlContext.easy);
 
 	dbgprint("Video Thread End\n");
 	return 0;

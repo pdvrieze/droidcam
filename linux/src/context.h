@@ -49,18 +49,18 @@ typedef struct _Settings {
 } Settings;
 
 
-typedef struct jpg_dec_ctx_s JpgDecContext;
+typedef struct _JpgDecContext JpgDecContext;
 
 
-typedef struct jpg_frame_s {
+typedef struct _Buffer {
 	unsigned char *data;
 	unsigned length;
-} JpgFrame;
+} Buffer;
 
 #define JPG_BACKBUF_MAX 10
 
 typedef struct _JpegDecoder {
-	JpgFrame jpg_frames[JPG_BACKBUF_MAX];
+	Buffer jpg_frames[JPG_BACKBUF_MAX];
 	JpgDecContext *jpg_decoder;
 } JpgCtx;
 
@@ -85,6 +85,6 @@ typedef struct _ThreadArgs {
 //	int droidcam_output_mode;
 } ThreadArgs;
 
-int thread_cmd;
+Callbacks thread_cmd;
 
 #endif //DROIDCAM_CONTEXT_H

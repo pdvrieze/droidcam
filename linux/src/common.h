@@ -35,7 +35,7 @@ extern void ShowError();
 
 #define errprint(...) fprintf(stderr, __VA_ARGS__)
 #define voidprint(...) /* */
-#define dbgprint      voidprint
+#define dbgprint      errprint
 
 #define VIDEO_INBUF_SZ 4096
 #define AUDIO_INBUF_SZ 32
