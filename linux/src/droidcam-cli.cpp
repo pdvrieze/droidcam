@@ -84,7 +84,7 @@ server_wait:
 early_out:
     dbgprint("disconnect\n");
     disconnect(videoSocket);
-	decoder_cleanup(context->jpgCtx);
+    context->jpgCtx->cleanupJpeg();
 
     if (keep_waiting){
         videoSocket = INVALID_SOCKET;

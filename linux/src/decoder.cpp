@@ -426,16 +426,16 @@ bool Decoder::prepareVideo(unsigned int srcWidth, int srcHeight)
 	return true;
 }
 
-
-void decoder_cleanup(Decoder *jpgCtx)
+void Decoder::cleanupJpeg()
 {
+	Decoder *jpgCtx = this;
 	dbgprint("Cleanup\n");
-	for (int i = 0; i < MAX_COMPONENTS; i++) {
-		free(jpgCtx->jpg_decoder->outbuf[i]);
+	for (auto & i : jpgCtx->jpg_decoder->outbuf) {
+		free(i);
 	}
 
 	for (int i = 0; i < JPG_BACKBUF_MAX; ++i) {
-		jpgCtx->jpg_frames->data = NULL;
+		jpgCtx->jpg_frames->data = nullptr;
 	}
 
 	doFree(jpgCtx->jpg_decoder->m_inBuf, std::function(free));

@@ -300,7 +300,7 @@ void *DroidcamVideoThreadProc(void *args)
 	early_out:
 	dbgprint("disconnect\n");
 	disconnect(videoSocket);
-	decoder_cleanup(jpgCtx);
+	jpgCtx->cleanupJpeg();
 
 	if (context->running && keep_waiting) {
 		videoSocket = INVALID_SOCKET;

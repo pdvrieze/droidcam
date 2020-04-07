@@ -397,7 +397,7 @@ void *ipcamVideoThreadProc(void *args)
 	FREE_OBJECT(curlContext.b.buffer, free)
 	FREE_OBJECT(curlContext.out.data, free)
 
-	decoder_cleanup(context->jpgCtx);
+	context->jpgCtx->cleanupJpeg();
 	bool result;
 	result = context->jpgCtx->init();
 

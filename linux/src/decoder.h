@@ -30,6 +30,8 @@ public:
 	bool prepareVideoFromFrame(Buffer *data);
 	bool prepareVideo(unsigned int srcWidth, int srcHeight);
 
+	void cleanupJpeg();
+
 public: // TODO make this private
 	Buffer jpg_frames[JPG_BACKBUF_MAX];
 	std::unique_ptr<JpgDecContext> jpg_decoder;
@@ -44,8 +46,6 @@ private:
 	void query_droidcam_v4l();
 };
 
-
-void decoder_cleanup(Decoder *jpgCtx);
 
 Buffer * decoder_get_next_frame(Decoder *jpgCtx);
 
