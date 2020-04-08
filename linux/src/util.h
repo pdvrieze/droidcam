@@ -21,7 +21,7 @@ inline void doFree(T *&ptr, std::function<void(U *)> freeFunc)
 	ptr = nullptr;
 }
 
-#define FREE_OBJECT(obj, free_func) { dbgprint(" " #obj " %p\n", obj); doFree(obj, free_func); }
+#define FREE_OBJECT(obj, free_func) { dbgprint(" Freeing(" #obj ") %p\n", obj); doFree(obj, free_func); }
 
 class DroidcamException : std::exception {
 public:

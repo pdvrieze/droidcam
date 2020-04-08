@@ -22,7 +22,12 @@ extern void ShowError(const char *title, const char *msg);
 #undef MAX_COMPONENTS
 #define MAX_COMPONENTS  4
 
-struct Dimension {
+class Dimension {
+public:
+	Dimension() = default;
+	Dimension(unsigned int w, unsigned int h): width(w), height(h){};
+	Dimension(const Dimension& d) = default;;
+
     unsigned int width;
     unsigned int height;
 };

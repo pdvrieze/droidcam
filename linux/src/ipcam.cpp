@@ -143,17 +143,14 @@ static gboolean consumeLine(CurlContext *curlContext, char *line, size_t maxLine
 static gboolean consumeBoundary(CurlContext *curlContext)
 {
 	ReadBuffer *b = &curlContext->b;
+
 	const char *boundary = curlContext->boundary;
 	size_t maxOffset = 2 + strlen(boundary);
+	if (b->recvCount-b->offset<maxOffset) { return false; } // Read more data
 
 	const unsigned char *lastAvail = b->buffer + b->recvCount;
 
 	const unsigned char *current = b->buffer + b->offset;
-
-	if (current[0] == CR && current[1] == LF) {
-		current += 2;
-		++(b->offset);
-	} // skip newline
 
 	size_t offset = 0;
 
@@ -207,6 +204,11 @@ static gboolean consumeSubHeader(CurlContext *curlContext)
 	}
 	if (line[0] != 0) { // We didn't read the entire header yet
 		return FALSE;
+	}
+	if (contentLength==0) {
+		// skip until next boundary
+		curlContext->state = ST_BOUNDARY;
+		return true;
 	}
 	Buffer *resultPtr = &curlContext->out;
 	if (resultPtr->data == NULL) {
@@ -292,10 +294,12 @@ void sendFrame(CurlContext *curlContext)
 		unsigned int srcWidth = decoder->srcWidth();
 		unsigned int srcHeight = decoder->srcHeight();
 
-		if (srcWidth != decoder->dstWidth() || srcHeight != decoder->dstHeight()) {
+/*
+		if (srcWidth != decoder->loopbackWidth() || srcHeight != decoder->loopbackHeight()) {
 			// If the size changed, reinitialize (not clear that this can happen)
 			decoder->initLoopback(srcWidth, srcHeight);
 		}
+*/
 	}
 	Buffer *frame = decoder->getNextFrame();
 	frame->data_length = curlContext->out.data_length;
@@ -370,10 +374,12 @@ void *ipcamVideoThreadProc(void *args)
 {
 	DCContext *context;
 	Settings *settings;
+	std::string hostName;
 	{
 		auto *threadargs = static_cast<ThreadArgs *>(args);
 		context = threadargs->context;
 		settings = &(context->settings);
+		hostName = threadargs->hostName;
 		delete threadargs;
 		args = 0;
 	}
@@ -383,7 +389,8 @@ void *ipcamVideoThreadProc(void *args)
 
 
 	char url[256];
-	snprintf(url, 255, "http://%s:%d/video", settings->hostName, settings->port);
+	snprintf(url, 255, "http://%s:%d/video", hostName.data(), settings->port);
+	dbgprint("Connecting to: %s\n", url);
 
 	if (curl_global_init(CURL_GLOBAL_NOTHING)) { return 0; }
 
@@ -405,6 +412,9 @@ void *ipcamVideoThreadProc(void *args)
 //	curl_multi_add_handle(curlContext.multi, curlContext.easy);
 
 	CURLcode res = curl_easy_perform(curlContext.easy);
+	if (res!=CURLE_OK) {
+		dbgprint("Curl error: %d\n", res);
+	}
 
 	early_out:
 	dbgprint("disconnect\n");

@@ -260,7 +260,7 @@ void *DroidcamVideoThreadProc(void *args)
 		throw DroidcamException("Droidcam not in proper output mode");
 	}
 
-	int len = snprintf(buf, sizeof(buf), VIDEO_REQ, decoder->dstWidth(), decoder->dstHeight());
+	int len = snprintf(buf, sizeof(buf), VIDEO_REQ, decoder->loopbackWidth(), decoder->loopbackHeight());
 	if (sendToSocket(buf, len, videoSocket) <= 0) {
 		MSG_ERROR("Error sending request, DroidCam might be busy with another client.");
 		goto early_out;
@@ -348,10 +348,12 @@ accel_callback(GtkAccelGroup *group,
                GdkModifierType mod,
                gpointer user_data)
 {
+/* TODO this is incorrect, that is not passed here
 	DCContext *context = ((CallbackContext *) user_data)->context;
 	if (context->running == 1 && thread_cmd == CB_NONE) {
 		thread_cmd = static_cast<Callback>(reinterpret_cast<size_t>(user_data));
 	}
+*/
 	return TRUE;
 }
 
@@ -371,8 +373,7 @@ static void doConnect(DCContext *context)
 		ip = settings->hostName;
 	}
 
-	ThreadArgs *args = new ThreadArgs;
-	(*args) = (ThreadArgs) {0, context};
+	ThreadArgs *args = new ThreadArgs{ 0, ip, context };
 
 	if (ip != nullptr) // Not Bluetooth or "Server Mode", so connect first
 	{

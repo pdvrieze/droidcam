@@ -99,8 +99,9 @@ bool Jpeg::decodeFrame(UncompressedFrame &out, const Buffer &in)
 	}
 
 	for (int row = 0; row < (int) dinfo->output_height; row += dinfo->max_v_samp_factor * DCTSIZE) {
-		JSAMPARRAY yuvptr[MAX_COMPONENTS];
-		int componentRow[MAX_COMPONENTS];
+		JSAMPARRAY yuvptr[dinfo->num_components];
+		int componentRow[dinfo->num_components];
+
 		for (int i = 0; i < dinfo->num_components; i++) {
 			jpeg_component_info *compptr = &dinfo->comp_info[i];
 			componentRow[i] = row * compptr->v_samp_factor / dinfo->max_v_samp_factor;
@@ -114,27 +115,126 @@ bool Jpeg::decodeFrame(UncompressedFrame &out, const Buffer &in)
 	return true;
 }
 
-void UncompressedFrame::ensureBuffer(const struct jpeg_decompress_struct &dinfo)
+UncompressedFrame::UncompressedFrame(Dimension size)
 {
-	unsigned int compWidths[MAX_COMPONENTS];
-	unsigned int compHeight = 0;
-	JSAMPLE *ptr = buffer;
+	_size = size;
+	size_t ySize = size.width * size.height;
+	size_t uvSize = ySize/4;
+	size_t yuv420size = (ySize*3)/2;
+	_frameSize = yuv420size* sizeof(JSAMPLE);
+}
+
+
+void UncompressedFrame::ensureYuv420Buffer(Dimension size)
+{
+	_size = size;
+	size_t neededBuffer = (size.width * size.height *3)/2;
+	if (_frameSize!=neededBuffer || bufferAllocSize<neededBuffer) {
+		buffer = new JSAMPLE[neededBuffer];
+		bufferAllocSize = neededBuffer;
+		_frameSize=neededBuffer;
+		last_numComponents=0;
+		last_compHeight=0;
+	}
+}
+
+
+void UncompressedFrame::ensureBuffer(Dimension size, unsigned int numComponents, Dimension componentBlocks[])
+{
+	_size = size;
+	unsigned int compWidths[MAX_COMPONENTS]; memset(compWidths, 0, sizeof(compWidths));
+	unsigned int compHeight[MAX_COMPONENTS]; memset(compHeight, 0, sizeof(compHeight));
 	size_t neededBuffer = 0;
 
 
+	{
+		size_t ySize = size.width * size.height;
+		size_t uvSize = ySize/4;
+		size_t yuv420size = (ySize*3)/2;
+		neededBuffer = yuv420size* sizeof(JSAMPLE);
+		_frameSize = neededBuffer;
+	}
+
+	for (int i = 0; i < numComponents; i++) {
+		compWidths[i] = componentBlocks[i].width * DCTSIZE;
+		compHeight[i] = componentBlocks[i].height * DCTSIZE;
+		for (int row = 0; row < compHeight[i]; row++) {
+			neededBuffer += PAD(compWidths[i], 4);
+		}
+	}
+
+
+	boolean needToReconfigure = last_numComponents != numComponents ||
+	                            last_compHeight != compHeight[0];
+
+	if (neededBuffer > bufferAllocSize) {
+		delete buffer;
+
+		// Get bigger amount just to avoid repeated reallocation
+		unsigned int toAllocate = 1024;
+		while (toAllocate < neededBuffer) { toAllocate <<= 1u; }
+
+		buffer = new JSAMPLE[toAllocate];
+		bufferAllocSize = toAllocate;
+		needToReconfigure = true;
+	}
+
+	for (int component = 0; !needToReconfigure && component < numComponents; ++component) {
+		needToReconfigure = needToReconfigure || lastCompWidths[component] != compWidths[component];
+	}
+
+
+	if (needToReconfigure) {
+		JSAMPLE *ptr = buffer;
+		for (int component = 0; component < numComponents; component++) {
+			delete componentOffsets[component];
+			componentOffsets[component] = new JSAMPROW[compHeight[component]];
+			for (int row = 0; row < compHeight[component]; row++) {
+				componentOffsets[component][row] = ptr;
+				ptr += PAD(compWidths[component], 4);
+			}
+		}
+		for(int i=0; i<MAX_COMPONENTS; ++i) { lastCompWidths[i] = compWidths[i]; }
+		last_compHeight = compHeight[0];
+		last_numComponents = numComponents;
+	}
+
+}
+
+void UncompressedFrame::ensureBuffer(const struct jpeg_decompress_struct &dinfo)
+{
+	Dimension componentBlocks[dinfo.num_components];
+	for (int i=0; i<dinfo.num_components; ++i) {
+		componentBlocks[i] = { dinfo.comp_info[i].width_in_blocks, dinfo.comp_info[i].height_in_blocks };
+	}
+	ensureBuffer(Dimension{dinfo.output_width, dinfo.output_height}, dinfo.num_components, componentBlocks);
+/*
+	unsigned int compWidths[MAX_COMPONENTS]; memset(compWidths, 0, sizeof(compWidths));
+	unsigned int compHeight[MAX_COMPONENTS]; memset(compHeight, 0, sizeof(compHeight));
+	size_t neededBuffer = 0;
+
+
+	{
+		size_t ySize = dinfo.output_width * dinfo.output_height;
+		size_t uvSize = ySize/4;
+		size_t yuv420size = (ySize*3)/2;
+		neededBuffer = yuv420size* sizeof(JSAMPLE);
+		_frameSize = neededBuffer;
+	}
+
 	for (int i = 0; i < dinfo.num_components; i++) {
 		compWidths[i] = dinfo.comp_info[i].width_in_blocks * DCTSIZE;
-		compHeight = dinfo.comp_info[i].height_in_blocks * DCTSIZE;
-		for (int row = 0; row < compHeight; row++) {
+		compHeight[i] = dinfo.comp_info[i].height_in_blocks * DCTSIZE;
+		for (int row = 0; row < compHeight[i]; row++) {
 			neededBuffer += PAD(compWidths[i], 4);
 		}
 	}
 
 
 	boolean needToReconfigure = last_numComponents != dinfo.num_components ||
-	                            last_compHeight != compHeight;
+	                            last_compHeight != compHeight[0];
 
-	if (neededBuffer < bufferAllocSize) {
+	if (neededBuffer > bufferAllocSize) {
 		delete buffer;
 
 		// Get bigger amount just to avoid repeated reallocation
@@ -152,15 +252,32 @@ void UncompressedFrame::ensureBuffer(const struct jpeg_decompress_struct &dinfo)
 
 
 	if (needToReconfigure) {
-		for (int i = 0; i < dinfo.num_components; i++) {
-			delete componentOffsets[i];
-			componentOffsets[i] = new JSAMPROW[compHeight];
-			for (int row = 0; row < compHeight; row++) {
-				componentOffsets[i][row] = ptr;
-				ptr += PAD(compWidths[i], 4);
+		JSAMPLE *ptr = buffer;
+		for (int component = 0; component < dinfo.num_components; component++) {
+			delete componentOffsets[component];
+			componentOffsets[component] = new JSAMPROW[compHeight[component]];
+			for (int row = 0; row < compHeight[component]; row++) {
+				componentOffsets[component][row] = ptr;
+				ptr += PAD(compWidths[component], 4);
 			}
 		}
+		for(int i=0; i<MAX_COMPONENTS; ++i) { lastCompWidths[i] = compWidths[i]; }
+		last_compHeight = compHeight[0];
+		last_numComponents = dinfo.num_components;
 	}
-
+*/
 
 }
+
+UncompressedFrame::UncompressedFrame()
+{
+	memset(componentOffsets, 0, sizeof(componentOffsets));
+	memset(lastCompWidths, 0, sizeof(lastCompWidths));
+}
+
+UncompressedFrame::~UncompressedFrame()
+{
+	delete buffer;
+	memset(componentOffsets, 0, sizeof(componentOffsets));
+}
+

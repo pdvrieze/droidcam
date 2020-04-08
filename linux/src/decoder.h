@@ -14,6 +14,7 @@
 #include "jpegpp.h"
 
 class Jpeg;
+class Scaler;
 
 class Decoder {
 public:
@@ -21,8 +22,8 @@ public:
 	Decoder();
 	~Decoder();
 
-	unsigned int dstWidth();
-	unsigned int dstHeight();
+	unsigned int loopbackWidth();
+	unsigned int loopbackHeight();
 
 	unsigned int srcWidth();
 	unsigned int srcHeight();
@@ -32,7 +33,7 @@ public:
 	unsigned int bufferedFramesMax() { return _bufferedFramesMax; }
 	void bufferedFramesMax(unsigned int newVal);
 
-	bool initLoopback(unsigned int width, unsigned int height);
+	bool initLoopback(unsigned int targetWidth, unsigned int targetHeight);
 	bool init();
 
 	bool prepareVideo(const char *header);
@@ -52,17 +53,18 @@ public: // TODO make this private
 	std::unique_ptr<JpgDecContext> jpg_decoder;
 	UncompressedFrame jpegOutput;
 
-	void publishFrameToLoopback(UncompressedFrame &jpegOutput);
+	void publishFrameToLoopback(const UncompressedFrame &jpegOutput);
 	void setTransform(int transform);
 
 private:
 	OutputMode _outputMode;
 	int _deviceFd;
 	unsigned int _bufferedFramesMax;
-	unsigned int _dstWidth;
-	unsigned int _dstHeight;
+	unsigned int _loopbackWidth;
+	unsigned int _loopbackHeight;
 
 	UncompressedFrame scalingResult;
+	std::unique_ptr<Scaler> scaler;
 
 	OutputMode findOutputDevice();
 	void query_droidcam_v4l();
@@ -72,5 +74,15 @@ private:
 	std::unique_ptr<Jpeg> _jpeg;
 };
 
+class Scaler {
+public:
+	Scaler();
+	~Scaler();
+
+	void scale(const UncompressedFrame &src, UncompressedFrame &dst);
+private:
+
+	struct SwsContext * swc = nullptr;
+};
 
 #endif

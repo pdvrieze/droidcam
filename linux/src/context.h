@@ -88,12 +88,13 @@ typedef struct _DCContext {
 	CallbackContext callbackData[20];
 } DCContext;
 
-typedef struct _ThreadArgs {
+class ThreadArgs {
+public:
 	int socket;
+	std::string hostName;
 	DCContext *context;
-//	Settings *settings;
-//	int droidcam_output_mode;
-} ThreadArgs;
+	ThreadArgs(int socketFd, char *hostName, DCContext *context): socket(socketFd), hostName(hostName), context(context) {}
+};
 
 extern Callback thread_cmd;
 

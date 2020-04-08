@@ -14,9 +14,12 @@ extern "C" {
 #include <jpeglib.h>
 }
 
-class UncompressedFrame;
+#include "common.h"
 
-struct Dimension;
+#undef MAX_COMPONENTS
+#define MAX_COMPONENTS 4
+
+class UncompressedFrame;
 
 class Buffer;
 
@@ -50,10 +53,23 @@ private:
 
 class UncompressedFrame {
 public:
+	UncompressedFrame();
+	explicit UncompressedFrame(Dimension size);
+	~UncompressedFrame();
+
 	void ensureBuffer(const struct jpeg_decompress_struct &dinfo);
+	void ensureBuffer(Dimension size, unsigned int numComponents, Dimension componentBlocks[]);
+	void ensureYuv420Buffer(Dimension size);
+
+	[[nodiscard]] unsigned int frameSize() const { return _frameSize; };
+	[[nodiscard]] Dimension size() const { return _size; }
+
+	[[nodiscard]] size_t ySize() const { return _size.width * _size.height; }
+
+	[[nodiscard]] size_t uvSize() const { return ySize() / 4u; };
 
 public: // TODO make private
-	JSAMPLE *buffer = 0;
+	JSAMPLE *buffer = nullptr;
 
 private:
 	unsigned int last_numComponents = 0;
@@ -61,6 +77,8 @@ private:
 	unsigned int lastCompWidths[MAX_COMPONENTS];
 	JSAMPROW *componentOffsets[MAX_COMPONENTS];
 	size_t bufferAllocSize = 0;
+	unsigned int _frameSize = 0;
+	Dimension _size;
 
 	friend bool Jpeg::decodeFrame(UncompressedFrame &, const Buffer &);
 };

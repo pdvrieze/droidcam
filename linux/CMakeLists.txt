@@ -4,6 +4,7 @@ project(droidcam)
 set(COMMON_SOURCE src/connection.cpp src/decoder.cpp src/util.cpp src/util.h src/jpegpp.cpp src/jpegpp.h)
 
 #set(CMAKE_CXX_COMPILER clang)
+set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_C_FLAGS_DEBUG} -g -march=native -mtune=native")
 #set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fsanitize-recover -g -march=native -mtune=native")
 set(CMAKE_CXX_FLAGS_RELEASE "-march=native -mtune=native -O2 -Wall -march=native -mtune=native")
 set(CMAKE_C_STANDARD 11)

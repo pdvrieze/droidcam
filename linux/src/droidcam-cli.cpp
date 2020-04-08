@@ -50,7 +50,7 @@ server_wait:
     }
 
     {
-        int len = snprintf(buf, sizeof(buf), VIDEO_REQ, context->decoder->dstWidth(), context->decoder->dstHeight());
+        int len = snprintf(buf, sizeof(buf), VIDEO_REQ, context->decoder->loopbackWidth(), context->decoder->loopbackHeight());
         if (sendToSocket(buf, len, videoSocket) <= 0){
             MSG_ERROR("Error sending request, DroidCam might be busy with another client.");
             goto early_out;
