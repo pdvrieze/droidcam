@@ -48,7 +48,7 @@ typedef struct _Settings {
 	char *hostName;
 	unsigned int port;
 	Callback connection; // Connection type
-	gboolean audio;
+	bool audio;
 	InputMode inputMode;
 } Settings;
 
@@ -83,7 +83,7 @@ typedef struct _DCContext {
 	GtkWidget *radioClient;
 	GtkWidget *mode_ipcam;
 	GtkWidget *mode_droidcam;
-	gboolean running;
+	bool running;
 	Decoder *decoder;
 	CallbackContext callbackData[20];
 } DCContext;

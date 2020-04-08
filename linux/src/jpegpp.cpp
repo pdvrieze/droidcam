@@ -208,64 +208,6 @@ void UncompressedFrame::ensureBuffer(const struct jpeg_decompress_struct &dinfo)
 		componentBlocks[i] = { dinfo.comp_info[i].width_in_blocks, dinfo.comp_info[i].height_in_blocks };
 	}
 	ensureBuffer(Dimension{dinfo.output_width, dinfo.output_height}, dinfo.num_components, componentBlocks);
-/*
-	unsigned int compWidths[MAX_COMPONENTS]; memset(compWidths, 0, sizeof(compWidths));
-	unsigned int compHeight[MAX_COMPONENTS]; memset(compHeight, 0, sizeof(compHeight));
-	size_t neededBuffer = 0;
-
-
-	{
-		size_t ySize = dinfo.output_width * dinfo.output_height;
-		size_t uvSize = ySize/4;
-		size_t yuv420size = (ySize*3)/2;
-		neededBuffer = yuv420size* sizeof(JSAMPLE);
-		_frameSize = neededBuffer;
-	}
-
-	for (int i = 0; i < dinfo.num_components; i++) {
-		compWidths[i] = dinfo.comp_info[i].width_in_blocks * DCTSIZE;
-		compHeight[i] = dinfo.comp_info[i].height_in_blocks * DCTSIZE;
-		for (int row = 0; row < compHeight[i]; row++) {
-			neededBuffer += PAD(compWidths[i], 4);
-		}
-	}
-
-
-	boolean needToReconfigure = last_numComponents != dinfo.num_components ||
-	                            last_compHeight != compHeight[0];
-
-	if (neededBuffer > bufferAllocSize) {
-		delete buffer;
-
-		// Get bigger amount just to avoid repeated reallocation
-		unsigned int toAllocate = 1024;
-		while (toAllocate < neededBuffer) { toAllocate <<= 1u; }
-
-		buffer = new JSAMPLE[toAllocate];
-		bufferAllocSize = toAllocate;
-		needToReconfigure = true;
-	}
-
-	for (int component = 0; !needToReconfigure && component < dinfo.num_components; ++component) {
-		needToReconfigure = needToReconfigure || lastCompWidths[component] != compWidths[component];
-	}
-
-
-	if (needToReconfigure) {
-		JSAMPLE *ptr = buffer;
-		for (int component = 0; component < dinfo.num_components; component++) {
-			delete componentOffsets[component];
-			componentOffsets[component] = new JSAMPROW[compHeight[component]];
-			for (int row = 0; row < compHeight[component]; row++) {
-				componentOffsets[component][row] = ptr;
-				ptr += PAD(compWidths[component], 4);
-			}
-		}
-		for(int i=0; i<MAX_COMPONENTS; ++i) { lastCompWidths[i] = compWidths[i]; }
-		last_compHeight = compHeight[0];
-		last_numComponents = dinfo.num_components;
-	}
-*/
 
 }
 

@@ -49,9 +49,9 @@ static const char CR = 13;
 static const char LF = 10;
 static const char CRLF[] = {CR, LF, 0};
 
-gboolean startsWith(const char *haystack, const char *needle)
+bool startsWith(const char *haystack, const char *needle)
 {
-	return haystack != NULL && strncmp(needle, haystack, strlen(needle)) == 0;
+	return haystack != nullptr && strncmp(needle, haystack, strlen(needle)) == 0;
 }
 
 static int wait_on_recv_socket(curl_socket_t sockfd, long timeout_ms)
@@ -63,7 +63,7 @@ static int wait_on_recv_socket(curl_socket_t sockfd, long timeout_ms)
 	FD_SET(sockfd, &errFds);
 
 	struct timeval tv = {.tv_sec=timeout_ms / 1000, .tv_usec=(timeout_ms % 1000) * 1000};
-	return select(sockfd + 1, &inFds, NULL, &errFds, &tv);
+	return select(sockfd + 1, &inFds, nullptr, &errFds, &tv);
 }
 
 static size_t min(size_t a, size_t b)
@@ -76,9 +76,9 @@ static size_t max(size_t a, size_t b)
 	return a > b ? a : b;
 }
 
-static gboolean readIntoBuffer(ReadBuffer *b, const char *data, size_t size)
+static bool readIntoBuffer(ReadBuffer *b, const char *data, size_t size)
 {
-	if (b->buffer != NULL) {
+	if (b->buffer != nullptr) {
 		b->recvCount -= b->offset;
 		memmove(b->buffer, b->buffer + b->offset, b->recvCount);
 		memset(b->buffer + b->recvCount, 0, b->maxSize - b->recvCount); // Set to zero
@@ -96,7 +96,7 @@ static gboolean readIntoBuffer(ReadBuffer *b, const char *data, size_t size)
 	return true;
 }
 
-static gboolean readIntoBuffer_Old(ReadBuffer *b, CurlContext *curlContext, size_t minRecv)
+static bool readIntoBuffer_Old(ReadBuffer *b, CurlContext *curlContext, size_t minRecv)
 {
 	while (curlContext->dcContext->running && b->recvCount < minRecv) {
 		// Read first buffer content
@@ -123,7 +123,7 @@ static gboolean readIntoBuffer_Old(ReadBuffer *b, CurlContext *curlContext, size
 	return true;
 }
 
-static gboolean consumeLine(CurlContext *curlContext, char *line, size_t maxLine)
+static bool consumeLine(CurlContext *curlContext, char *line, size_t maxLine)
 {
 	ReadBuffer *b = &(curlContext->b);
 	unsigned char *last = b->buffer + b->recvCount - 1; // extra space for LF
@@ -140,7 +140,7 @@ static gboolean consumeLine(CurlContext *curlContext, char *line, size_t maxLine
 	}
 }
 
-static gboolean consumeBoundary(CurlContext *curlContext)
+static bool consumeBoundary(CurlContext *curlContext)
 {
 	ReadBuffer *b = &curlContext->b;
 
@@ -187,7 +187,7 @@ static gboolean consumeBoundary(CurlContext *curlContext)
 	}
 }
 
-static gboolean consumeSubHeader(CurlContext *curlContext)
+static bool consumeSubHeader(CurlContext *curlContext)
 {
 	size_t contentLength = 0;
 	char line[LINESIZE];
@@ -211,12 +211,12 @@ static gboolean consumeSubHeader(CurlContext *curlContext)
 		return true;
 	}
 	Buffer *resultPtr = &curlContext->out;
-	if (resultPtr->data == NULL) {
+	if (resultPtr->data == nullptr) {
 		resultPtr->data = static_cast<unsigned char *>(malloc(contentLength));
 		resultPtr->buf_size = contentLength;
 	} else if (contentLength > resultPtr->buf_size || (contentLength < (resultPtr->buf_size / 4))) {
 		resultPtr->data = static_cast<unsigned char *>(realloc(resultPtr->data, contentLength));
-		if (resultPtr->data == NULL) {
+		if (resultPtr->data == nullptr) {
 			dbgprint("Error reallocating memory from %lu to %lu bytes\n", resultPtr->buf_size, contentLength);
 			curlContext->state = ST_ERROR;
 			return false;
@@ -241,7 +241,7 @@ bool readBoundary(CurlContext *curlContext)
 
 	char *start = strstr(contentType, "boundary");
 	char *end = start + strlen(start);
-	if (start == NULL) {
+	if (start == nullptr) {
 		MSG_ERROR("Missing boundary");
 		return false;
 	}
@@ -259,7 +259,7 @@ bool readBoundary(CurlContext *curlContext)
 	return true;
 }
 
-gboolean consumeFrame(CurlContext *curlContext)
+bool consumeFrame(CurlContext *curlContext)
 {
 
 	ReadBuffer *b = &curlContext->b;
@@ -290,17 +290,6 @@ gboolean consumeFrame(CurlContext *curlContext)
 void sendFrame(CurlContext *curlContext)
 {
 	Decoder *decoder = curlContext->dcContext->decoder;
-	if (decoder->outputMode() == OutputMode::OM_V4LLOOPBACK) {
-		unsigned int srcWidth = decoder->srcWidth();
-		unsigned int srcHeight = decoder->srcHeight();
-
-/*
-		if (srcWidth != decoder->loopbackWidth() || srcHeight != decoder->loopbackHeight()) {
-			// If the size changed, reinitialize (not clear that this can happen)
-			decoder->initLoopback(srcWidth, srcHeight);
-		}
-*/
-	}
 	Buffer *frame = decoder->getNextFrame();
 	frame->data_length = curlContext->out.data_length;
 	memcpy(frame->data, curlContext->out.data, frame->data_length); // Actually put the JPEG into the buffer
@@ -309,7 +298,7 @@ void sendFrame(CurlContext *curlContext)
 size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
 	g_assert(size == 1);
-	CurlContext *curlContext = static_cast<CurlContext *>(userdata);
+	auto *curlContext = static_cast<CurlContext *>(userdata);
 	if (curlContext->boundary[0] == 0) {
 		g_assert(curlContext->state == ST_INIT);
 		readBoundary(curlContext);
@@ -319,7 +308,7 @@ size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)
 
 	readIntoBuffer(b, ptr, nmemb);
 
-	gboolean continueLoop = true;
+	bool continueLoop = true;
 	while (continueLoop &&
 	       b->offset < b->recvCount &&
 	       curlContext->state != ST_ERROR &&

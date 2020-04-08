@@ -98,7 +98,7 @@ static int StartInetServer(int port)
         goto _error_out;
     }
 
-    flags = fcntl(wifiServerSocket, F_GETFL, NULL);
+    flags = fcntl(wifiServerSocket, F_GETFL, nullptr);
     if(flags < 0)
     {
         MSG_LASTERROR("Error: fcntl");
@@ -129,7 +129,7 @@ void disconnect(SOCKET s) {
     close(s);
 }
 
-SOCKET accept_connection(unsigned int port, int *running)
+SOCKET accept_connection(unsigned int port, bool *running)
 {
     int flags;
     SOCKET client =  INVALID_SOCKET;
@@ -139,7 +139,7 @@ SOCKET accept_connection(unsigned int port, int *running)
         goto _error_out;
 
     errprint("waiting on port %d..", port);
-    while(*running && (client = accept(wifiServerSocket, NULL, NULL)) == INVALID_SOCKET)
+    while(*running && (client = accept(wifiServerSocket, nullptr, nullptr)) == INVALID_SOCKET)
     {
         if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR){
             usleep(50000);
@@ -152,7 +152,7 @@ SOCKET accept_connection(unsigned int port, int *running)
 
     if (client != INVALID_SOCKET) {
         // Blocking..
-        flags = fcntl(wifiServerSocket, F_GETFL, NULL);
+        flags = fcntl(wifiServerSocket, F_GETFL, nullptr);
         flags |= O_NONBLOCK;
         fcntl(wifiServerSocket, F_SETFL, flags);
     }

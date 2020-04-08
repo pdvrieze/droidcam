@@ -16,6 +16,13 @@
 class Jpeg;
 class Scaler;
 
+enum class Transform: unsigned int {
+	DEG0 = 0,
+	DEG90,
+	DEG180,
+	DEG270
+};
+
 class Decoder {
 public:
 
@@ -25,12 +32,8 @@ public:
 	unsigned int loopbackWidth();
 	unsigned int loopbackHeight();
 
-	unsigned int srcWidth();
-	unsigned int srcHeight();
-
 	OutputMode outputMode() {return _outputMode; };
 
-	unsigned int bufferedFramesMax() { return _bufferedFramesMax; }
 	void bufferedFramesMax(unsigned int newVal);
 
 	bool initLoopback(unsigned int targetWidth, unsigned int targetHeight);
@@ -49,29 +52,44 @@ public:
 
 public: // TODO make this private
 	Buffer jpg_frames[JPG_BACKBUF_MAX];
-	size_t nextFrame;
+	size_t nextFrameToDisplay;
+	size_t nextFrameToStore;
 	std::unique_ptr<JpgDecContext> jpg_decoder;
 	UncompressedFrame jpegOutput;
 
 	void publishFrameToLoopback(const UncompressedFrame &jpegOutput);
-	void setTransform(int transform);
+	Transform transform() { return _transform; }
+	void setTransform(Transform transform);
 
 private:
 	OutputMode _outputMode;
 	int _deviceFd;
+
+	unsigned int bufferedFramesMax() { return _bufferedFramesMax; }
+	unsigned int bufferedFramesCnt() { return _bufferedFramesCnt; }
+
 	unsigned int _bufferedFramesMax;
+	unsigned int _bufferedFramesCnt=0;
 	unsigned int _loopbackWidth;
 	unsigned int _loopbackHeight;
+	Transform _transform = Transform::DEG0;
+	float scale_matrix[9];
+	float angle_matrix[9];
+
 
 	UncompressedFrame scalingResult;
+	UncompressedFrame scratchBuffer;
 	std::unique_ptr<Scaler> scaler;
+
+	Jpeg &jpeg();
 
 	OutputMode findOutputDevice();
 	void query_droidcam_v4l();
 	void decodeNextFrame();
 
-	void apply_transform(unsigned char *yuv420image, unsigned char *scratch);
-	std::unique_ptr<Jpeg> _jpeg;
+
+	void apply_transform(UncompressedFrame &yuv420image, UncompressedFrame &scratch);
+	std::unique_ptr<Jpeg> x_jpeg;
 };
 
 class Scaler {

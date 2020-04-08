@@ -34,7 +34,7 @@ void stream_video(DCContext *context)
     int keep_waiting = 0;
     SOCKET videoSocket = INVALID_SOCKET;
 
-    if (g_ip != NULL) {
+    if (g_ip != nullptr) {
         videoSocket = connect_droidcam(g_ip, g_port);
         if (videoSocket == INVALID_SOCKET) {
             return;
@@ -109,7 +109,7 @@ void usage(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
     if (argc == 3 && argv[1][0] == '-' && argv[1][1] == 'l') {
-        g_ip = NULL;
+        g_ip = nullptr;
         g_port = atoi(argv[2]);
     }
     else if (argc == 3) {
