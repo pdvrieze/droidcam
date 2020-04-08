@@ -46,7 +46,7 @@ SOCKET connect_droidcam(char * ip, unsigned int port)
     return sock;
 }
 
-int SendRecv(int doSend, char * buffer, int bytes, SOCKET s)
+static ssize_t sendRecvImpl(int doSend, char * buffer, int bytes, SOCKET s)
 {
     int retCode;
     char * ptr = buffer;
@@ -63,12 +63,12 @@ int SendRecv(int doSend, char * buffer, int bytes, SOCKET s)
     return 1;
 }
 
-int sendToSocket(char * buffer, int bytes, SOCKET s) {
-	return SendRecv(1, buffer, bytes, s);
+ssize_t sendToSocket(char * buffer, size_t count, SOCKET s) {
+	return sendRecvImpl(1, buffer, count, s);
 }
-int recvFromSocket(char * buffer, int bytes, SOCKET s)
+ssize_t recvFromSocket(char * buffer, size_t count, SOCKET s)
 {
-	return SendRecv(0, buffer, bytes, s);
+	return sendRecvImpl(0, buffer, count, s);
 }
 
 static int StartInetServer(int port)

@@ -45,6 +45,7 @@ public:
 
 	void rotate();
 
+	void putNextFrame(Buffer &frame);
 	Buffer *getNextFrame();
 	void showTestImage();
 

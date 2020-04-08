@@ -290,9 +290,7 @@ bool consumeFrame(CurlContext *curlContext)
 void sendFrame(CurlContext *curlContext)
 {
 	Decoder *decoder = curlContext->dcContext->decoder;
-	Buffer *frame = decoder->getNextFrame();
-	frame->data_length = curlContext->out.data_length;
-	memcpy(frame->data, curlContext->out.data, frame->data_length); // Actually put the JPEG into the buffer
+	decoder->putNextFrame(curlContext->out);
 }
 
 size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)

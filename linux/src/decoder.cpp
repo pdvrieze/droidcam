@@ -566,6 +566,34 @@ void Decoder::rotate()
 	setTransform(t);
 }
 
+
+void Decoder::putNextFrame(Buffer &frame)
+{
+	while (bufferedFramesCnt() > bufferedFramesMax()) {
+		--_bufferedFramesCnt;
+		nextFrameToDisplay = (nextFrameToDisplay + 1) % JPG_BACKBUF_MAX;
+	}
+	if (bufferedFramesCnt() == bufferedFramesMax()) {
+		dbgprint("\ndecoding #%2lud (have buffered: %d)\n", nextFrameToDisplay, bufferedFramesCnt());
+		decodeNextFrame();
+		--_bufferedFramesCnt;
+		nextFrameToDisplay = (nextFrameToDisplay + 1) % JPG_BACKBUF_MAX;
+	}
+
+	/*
+	 * a call to this function assumes we are about to get a full frame (or exit on failure).
+	 * so increment the # of buffered frames. do this after the while() loop above to
+	 * take care of the initial case:
+	 */
+	++_bufferedFramesCnt;
+
+	swap(jpg_frames[nextFrameToStore], frame);
+
+	nextFrameToStore = (nextFrameToStore + 1) % JPG_BACKBUF_MAX;
+	return
+
+}
+
 /**
  * Move the context to the next frame
  * @return the frame to write to

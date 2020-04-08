@@ -20,7 +20,7 @@ SOCKET accept_connection(unsigned int port, bool *running);
 
 //int SendRecv(int doSend, char * buffer, int bytes, SOCKET s);
 
-int sendToSocket(char * buffer, int bytes, SOCKET s);
-int recvFromSocket(char * buffer, int bytes, SOCKET s);
+ssize_t sendToSocket(char * buffer, size_t count, SOCKET s);
+ssize_t recvFromSocket(char * buffer, size_t count, SOCKET s);
 
 #endif

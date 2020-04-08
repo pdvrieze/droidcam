@@ -90,10 +90,13 @@ static int CheckAdbDevices(unsigned int port)
 	} else if (haveDevice == 4) {
 		system("adb kill-server");
 		MSG_ERROR("Device is offline. Try re-attaching device.");
+#pragma clang diagnostic push
+#pragma ide diagnostic ignored "OCDFAInspection"
 	} else if (haveDevice == 8) {
 		sprintf(buf, "adb forward tcp:%d tcp:%d", port, port);
 		system(buf);
 	}
+#pragma clang diagnostic pop
 	_exit:
 	dbgprint("haveDevice = %d\n", haveDevice);
 	return haveDevice;
@@ -130,6 +133,7 @@ static void loadSettings(DCContext *context)
 	{
 		version = 0;
 		if (fgets(buf, sizeof(buf), fp)) {
+			if (buf[0]!='v') return; // invalid file
 			sscanf(buf, "v%d", &version);
 		}
 
@@ -161,7 +165,7 @@ static void loadSettings(DCContext *context)
 	}
 
 	if(context->settings.inputMode==IM_IPCAM) {
-		gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(context->mode_ipcam), (!(0)));
+		gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(context->mode_ipcam), true);
 	}
 
 	gtk_entry_set_text(GTK_ENTRY(context->ipEntry), context->settings.hostName);
@@ -279,22 +283,23 @@ void *DroidcamVideoThreadProc(void *args)
 
 	while (context->running) {
 		if (thread_cmd != CB_NONE) {
-			int len = sprintf(buf, OTHER_REQ, thread_cmd -10);
-			sendToSocket(buf, len, videoSocket);
+			auto len = sprintf(buf, OTHER_REQ, thread_cmd -10);
+			auto res =sendToSocket(buf, len, videoSocket);
+			if(res<0) { fprintf(stderr, "Failure to send command: %ld", res); };
 			thread_cmd = CB_NONE;
 		}
 
 		Buffer *f = decoder->getNextFrame();
-		if (recvFromSocket(buf, 4, videoSocket) == false) break;
+		if (recvFromSocket(buf, 4, videoSocket)<=0) break;
 		unsigned int frameLen = make_int4(buf[0], buf[1], buf[2], buf[3]);
 		f->data_length = frameLen;
 		char *p = (char *) f->data;
 		while (frameLen > 4096) {
-			if (recvFromSocket(p, 4096, videoSocket) == false) goto early_out;
+			if (recvFromSocket(p, 4096, videoSocket)<=0) goto early_out;
 			frameLen -= 4096;
 			p += 4096;
 		}
-		if (recvFromSocket(p, frameLen, videoSocket) == false) break;
+		if (recvFromSocket(p, frameLen, videoSocket)<=0) break;
 	}
 
 	early_out:
@@ -313,12 +318,12 @@ void *DroidcamVideoThreadProc(void *args)
 	// gtk_widget_set_sensitive(GTK_WIDGET(g_settings.button), TRUE);
 	// gdk_threads_leave();
 	dbgprint("Video Thread End\n");
-	return 0;
+	return nullptr;
 }
 
 static void StopVideo(DCContext *context)
 {
-	context->running = 0;
+	context->running = false;
 	if (hVideoThread != nullptr) {
 		dbgprint("Waiting for videothread..\n");
 		g_thread_join(hVideoThread);
@@ -354,7 +359,7 @@ accel_callback(GtkAccelGroup *group,
 		thread_cmd = static_cast<Callback>(reinterpret_cast<size_t>(user_data));
 	}
 */
-	return (!(0));
+	return true;
 }
 
 static void doConnect(DCContext *context)
@@ -524,7 +529,7 @@ static CallbackContext *cbContext(DCContext *context, Callback cb)
 
 int main(int argc, char *argv[])
 {
-	Decoder decoder = {};
+	Decoder decoder{};
 	DCContext context = {
 		.settings = {},
 		.button=nullptr,
@@ -533,7 +538,7 @@ int main(int argc, char *argv[])
 	};
 
 
-	if ((&decoder)->init()) {
+	if (decoder.init()) {
 
 		GtkWidget *window;
 		GtkWidget *hbox, *hbox2, *hbox3;
@@ -634,7 +639,7 @@ int main(int argc, char *argv[])
 		}
 
 		context.radioClient = gtk_radio_button_new_with_label(nullptr, "WiFi / LAN");
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context.radioClient), (!(0)));
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context.radioClient), true);
 		g_signal_connect(context.radioClient, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_RADIO_WIFI));
 		gtk_box_pack_start(GTK_BOX(vbox), context.radioClient, false, false, 0);
 

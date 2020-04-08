@@ -63,6 +63,16 @@ public:
 	size_t data_length = 0;
 };
 
+void swap(Buffer &a, Buffer &b) noexcept
+{
+	std::swap(a.data, b.data);
+	std::swap(a.buf_size, b.buf_size);
+	std::swap(a.data_length, b.data_length);
+}
+
+namespace std {
+}
+
 #define JPG_BACKBUF_MAX 10
 
 typedef struct _DCContext DCContext;
@@ -93,7 +103,10 @@ public:
 	int socket;
 	std::string hostName;
 	DCContext *context;
-	ThreadArgs(int socketFd, char *hostName, DCContext *context): socket(socketFd), hostName(hostName), context(context) {}
+
+	ThreadArgs(int socketFd, char *hostName, DCContext *context) : socket(socketFd), hostName(hostName),
+	                                                               context(context)
+	{}
 };
 
 extern Callback thread_cmd;
