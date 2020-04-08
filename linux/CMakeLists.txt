@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 
 project(droidcam)
-set(COMMON_SOURCE src/connection.cpp src/decoder.cpp src/util.cpp src/util.h)
+set(COMMON_SOURCE src/connection.cpp src/decoder.cpp src/util.cpp src/util.h src/jpegpp.cpp src/jpegpp.h)
 
 #set(CMAKE_CXX_COMPILER clang)
 #set(CMAKE_CXX_FLAGS_DEBUG  "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address -fsanitize-recover -g -march=native -mtune=native")

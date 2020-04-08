@@ -19,12 +19,13 @@ extern void ShowError(const char *title, const char *msg);
 #define VIDEO_REQ "CMD /v2/video?%dx%d"
 #define OTHER_REQ "CMD /v1/ctl?%d"
 
-#define AUDIO_REQ "CMD /v2/audio"
-#define STOP_REQ  "CMD /v1/stop"
+#undef MAX_COMPONENTS
+#define MAX_COMPONENTS  4
 
-#define PING_REQ "CMD /ping"
-
-#define CSTR_LEN(x) (sizeof(x)-1)
+struct Dimension {
+    unsigned int width;
+    unsigned int height;
+};
 
 inline unsigned int make_int(unsigned char b1, unsigned char b2)
 {

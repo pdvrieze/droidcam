@@ -11,6 +11,9 @@
 #define __DECODR_H__
 
 #include "context.h"
+#include "jpegpp.h"
+
+class Jpeg;
 
 class Decoder {
 public:
@@ -47,8 +50,9 @@ public: // TODO make this private
 	Buffer jpg_frames[JPG_BACKBUF_MAX];
 	size_t nextFrame;
 	std::unique_ptr<JpgDecContext> jpg_decoder;
+	UncompressedFrame jpegOutput;
 
-	void publishFrameToLoopback();
+	void publishFrameToLoopback(UncompressedFrame &jpegOutput);
 	void setTransform(int transform);
 
 private:
@@ -58,12 +62,14 @@ private:
 	unsigned int _dstWidth;
 	unsigned int _dstHeight;
 
+	UncompressedFrame scalingResult;
+
 	OutputMode findOutputDevice();
 	void query_droidcam_v4l();
-
 	void decodeNextFrame();
 
 	void apply_transform(unsigned char *yuv420image, unsigned char *scratch);
+	std::unique_ptr<Jpeg> _jpeg;
 };
 
 

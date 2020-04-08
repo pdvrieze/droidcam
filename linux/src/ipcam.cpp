@@ -355,6 +355,17 @@ size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)
 	return nmemb;
 }
 
+int progress(void *clientp,   curl_off_t dltotal,   curl_off_t dlnow,   curl_off_t ultotal,   curl_off_t ulnow) {
+	auto curlContext = static_cast<CurlContext *>(clientp);
+	if (! curlContext->dcContext->running) {
+		return 1;
+	} else {
+		dbgprint(dlnow==0 ? "." : "*");
+	}
+
+	return 0;
+}
+
 void *ipcamVideoThreadProc(void *args)
 {
 	DCContext *context;
@@ -377,7 +388,7 @@ void *ipcamVideoThreadProc(void *args)
 	if (curl_global_init(CURL_GLOBAL_NOTHING)) { return 0; }
 
 
-	CurlContext curlContext;
+	CurlContext curlContext{};
 	curlContext.easy = curl_easy_init();
 	curlContext.boundary[0] = 0;
 	curlContext.dcContext = context;
@@ -386,6 +397,9 @@ void *ipcamVideoThreadProc(void *args)
 	curl_easy_setopt(curlContext.easy, CURLOPT_URL, url);
 	curl_easy_setopt(curlContext.easy, CURLOPT_WRITEFUNCTION, processData);
 	curl_easy_setopt(curlContext.easy, CURLOPT_WRITEDATA, &curlContext);
+	curl_easy_setopt(curlContext.easy, CURLOPT_NOPROGRESS, 0);
+	curl_easy_setopt(curlContext.easy, CURLOPT_XFERINFOFUNCTION, progress);
+	curl_easy_setopt(curlContext.easy, CURLOPT_XFERINFODATA, &curlContext);
 //	curl_easy_setopt(curlContext.easy, CURLOPT_VERBOSE, 1L);
 
 //	curl_multi_add_handle(curlContext.multi, curlContext.easy);

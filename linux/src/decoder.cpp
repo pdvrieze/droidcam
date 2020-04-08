@@ -21,7 +21,7 @@ extern "C" {
 #include <cstdlib>
 #include <cstring>
 #include <cerrno>
-#include <climits>
+#include <cmath>
 
 extern "C" {
 #include <sys/ioctl.h>
@@ -30,11 +30,11 @@ extern "C" {
 #include <linux/videodev2.h>
 #include <turbojpeg.h>
 
-#include <jpeglib.h>
 #include <libswscale/swscale.h>
 // #include "speex/speex.h"
 }
 
+#include "jpegpp.h"
 #include "common.h"
 #include "decoder.h"
 #include "context.h"
@@ -61,8 +61,6 @@ typedef enum {
 } TJSAMP_Ext;
 
 
-#undef MAX_COMPONENTS
-#define MAX_COMPONENTS  4
 
 static const int pixelsize[TJ_NUMSAMP] = {3, 3, 3, 1, 3, 3};
 
@@ -111,8 +109,9 @@ public:
 };
 
 
-Decoder::Decoder() : jpg_decoder(std::make_unique<JpgDecContext>()), _bufferedFramesMax(1)
+Decoder::Decoder() : jpg_decoder(std::make_unique<JpgDecContext>()), _bufferedFramesMax(1), nextFrame(0), _outputMode(OutputMode::OM_DROIDCAM)
 {
+//	memset(&jpg_frames, 0, sizeof(jpg_frames));
 }
 
 Decoder::~Decoder()
@@ -124,20 +123,6 @@ Decoder::~Decoder()
 		jpg_decoder->init = FALSE;
 	}
 };
-
-void joutput_message(j_common_ptr cinfo)
-{
-	char buffer[JMSG_LENGTH_MAX];
-	(*cinfo->err->format_message)(cinfo, buffer);
-	dbgprint("JERR: %s\n", buffer);
-}
-
-void jerror_exit(j_common_ptr cinfo)
-{
-	dbgprint("jerror_exit(), fatal error\n");
-	fatal_error = 1;
-	(*cinfo->err->output_message)(cinfo);
-}
 
 static inline void fill_matrix(float sx, float sy, float angle, float scale, float *matrix)
 {
@@ -249,8 +234,10 @@ void Decoder::bufferedFramesMax(unsigned int newVal)
 
 bool Decoder::initLoopback(unsigned int width, unsigned int height)
 {
-	_dstWidth = width;
-	_dstHeight = height;
+	/* TODO make this close and reopen the file descriptor if the size isn't as desired. The size is only resettable
+	 * by closing the device (on all sides).
+	 */
+
 	jpg_decoder->m_webcamYuvSize = static_cast<int>(width * height * 3 / 2);
 	jpg_decoder->m_webcam_ySize = static_cast<int>(width * height);
 	jpg_decoder->m_webcam_uvSize = jpg_decoder->m_webcam_ySize / 4;
@@ -277,6 +264,9 @@ bool Decoder::initLoopback(unsigned int width, unsigned int height)
 	dbgprint("  vid_format->fmt.pix.field       =%d\n", vid_format.fmt.pix.field);
 	dbgprint("  vid_format->fmt.pix.bytesperline=%d\n", vid_format.fmt.pix.bytesperline);
 	dbgprint("  vid_format->fmt.pix.colorspace  =%d\n", vid_format.fmt.pix.colorspace);
+	_dstWidth = vid_format.fmt.pix.width;
+	_dstHeight = vid_format.fmt.pix.height;
+
 	return true;
 }
 
@@ -410,7 +400,7 @@ void Decoder::cleanupJpeg()
 	Decoder *jpgCtx = this;
 	dbgprint("Cleanup\n");
 	for (auto & i : jpgCtx->jpg_decoder->outbuf) {
-		free(i);
+		FREE_OBJECT(i, free);
 	}
 
 	for (int i = 0; i < JPG_BACKBUF_MAX; ++i) {
@@ -430,7 +420,10 @@ void Decoder::cleanupJpeg()
 void Decoder::decodeNextFrame()
 {
 	Buffer &frame = jpg_frames[nextFrame];
+	if (! _jpeg) _jpeg = std::make_unique<Jpeg>();
 
+	_jpeg->decodeFrame(jpegOutput, frame);
+	publishFrameToLoopback(jpegOutput);
 }
 
 static void decode_next_frame(Decoder *jpgCtx)
@@ -497,9 +490,11 @@ static void decode_next_frame(Decoder *jpgCtx)
 			iw[i] = compptr->width_in_blocks * DCTSIZE;
 			ih = compptr->height_in_blocks * DCTSIZE;
 			cw[i] =
-				PAD(dinfo->image_width, dinfo->max_h_samp_factor) * compptr->h_samp_factor / dinfo->max_h_samp_factor;
+				PAD(dinfo->image_width, dinfo->max_h_samp_factor) * compptr->h_samp_factor /
+				dinfo->max_h_samp_factor;
 			ch[i] =
-				PAD(dinfo->image_height, dinfo->max_v_samp_factor) * compptr->v_samp_factor / dinfo->max_v_samp_factor;
+				PAD(dinfo->image_height, dinfo->max_v_samp_factor) * compptr->v_samp_factor /
+				dinfo->max_v_samp_factor;
 			if (iw[i] != cw[i] || ih != ch[i]) {
 				usetmpbuf = true;
 				fprintf(stderr, "error: need a temp buffer, this shouldnt happen!\n");
@@ -552,11 +547,11 @@ static void decode_next_frame(Decoder *jpgCtx)
 		jpeg_read_raw_data(dinfo, yuvptr, dinfo->max_v_samp_factor * DCTSIZE);
 	}
 	jpeg_finish_decompress(dinfo);
-	jpgCtx->publishFrameToLoopback();
+	jpgCtx->publishFrameToLoopback(jpgCtx->jpegOutput);
 }
 
 static void apply_transform_helper(const uint8_t *src, uint8_t *dst,
-                                   unsigned int width, unsigned int height, int transformNull, const float *matrix)
+                                   unsigned int width, unsigned int height, unsigned int transformNull, const float *matrix)
 {
 	int x, y;
 	float x_s, y_s, d;
@@ -570,8 +565,8 @@ static void apply_transform_helper(const uint8_t *src, uint8_t *dst,
 			x_s = (float) x * matrix[0] + (float) y * matrix[1] + matrix[2];
 			y_s = (float) x * matrix[3] + (float) y * matrix[4] + matrix[5];
 
-			d = PIXEL(src, (int) (x_s + 0.5), (int) (y_s + 0.5), width, height, width, 0);
-			dst[y * width + x] = (transformNull > 0 && d == 0) ? transformNull : d;
+			d = PIXEL(src, lround(x_s), lround(y_s), width, height, width, 0);
+			dst[y * width + x] = (transformNull > 0 && d == 0) ? static_cast<float>(transformNull) : d;
 		}
 	}
 }
@@ -647,9 +642,9 @@ void Decoder::apply_transform(unsigned char *yuv420image, unsigned char *scratch
 	}
 }
 
-void Decoder::publishFrameToLoopback()
+void Decoder::publishFrameToLoopback(UncompressedFrame &jpegOutput)
 {
-	unsigned char *p = jpg_decoder->m_decodeBuf;
+	unsigned char *p = jpegOutput.buffer;
 	if (jpg_decoder->swc != nullptr) {
 		uint8_t *srcSlice[4];
 		uint8_t *dstSlice[4];
@@ -693,9 +688,7 @@ void Decoder::showTestImage()
 {
 	int i, j;
 	if (outputMode() == OutputMode::OM_V4LLOOPBACK) {
-		_dstWidth = 1280;
-		_dstHeight = 720;
-		if (!initLoopback(dstWidth(), dstHeight())) return;
+		if (!initLoopback(1280, 720)) return;
 	}
 
 	unsigned int srcWidth = dstWidth() * 2;
@@ -725,7 +718,7 @@ void Decoder::showTestImage()
 		while (p < line_end) p++;
 	}
 
-	publishFrameToLoopback();
+	publishFrameToLoopback(jpegOutput);
 	rotate();
 
 }
@@ -736,8 +729,8 @@ void Decoder::setTransform(int transform) {
 	float moveY = 0;
 	float rot = 0;
 
-	float WEBCAM_Wf = static_cast<float>(dstWidth());
-	float WEBCAM_Hf = static_cast<float>(dstHeight());
+	auto width = static_cast<float>(dstWidth());
+	auto height = static_cast<float>(dstHeight());
 	/*
 	 * FILE *fp = fopen("/tmp/specs", "r");
 	 * if (fp) {
@@ -754,17 +747,17 @@ void Decoder::setTransform(int transform) {
 	jpg_decoder->transform = transform;
 	if (transform == 1) {
 		rot = 90;
-		scale = WEBCAM_Wf / WEBCAM_Hf;
-		moveX = WEBCAM_Hf;
-		moveY = (WEBCAM_Hf / scale - WEBCAM_Wf) / 2.0f;
+		scale = width / height;
+		moveX = height;
+		moveY = (height / scale - width) / 2.0f;
 	} else if (transform == 2) {
 		rot = 180;
-		moveX = WEBCAM_Wf;
-		moveY = WEBCAM_Hf;
+		moveX = width;
+		moveY = height;
 	} else if (transform == 3) {
 		rot = 270;
-		scale = WEBCAM_Wf / WEBCAM_Hf;
-		moveY = WEBCAM_Hf;
+		scale = width / height;
+		moveY = height;
 	} else {
 		jpg_decoder->transform = 0;
 	}
@@ -792,7 +785,7 @@ Buffer *Decoder::getNextFrame()
 	}
 	if (jpg_decoder->m_BufferedFrames == bufferedFramesMax()) {
 		dbgprint("decoding #%2lud (have buffered: %d)\n", nextFrame, jpg_decoder->m_BufferedFrames);
-		decode_next_frame(this);
+		decodeNextFrame();
 		jpg_decoder->m_BufferedFrames--;
 		nextFrame = (nextFrame+1) % JPG_BACKBUF_MAX;
 	}

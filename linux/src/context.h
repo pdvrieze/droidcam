@@ -14,14 +14,14 @@ typedef enum _InputMode {
 } InputMode;
 
 enum class OutputMode {
-	OM_MISSING=0,
-	OM_DROIDCAM=1,
-	OM_V4LLOOPBACK=2
+	OM_MISSING = 0,
+	OM_DROIDCAM = 1,
+	OM_V4LLOOPBACK = 2
 
 };
 
 typedef enum _Callbacks {
-	CB_NONE=0,
+	CB_NONE = 0,
 	CB_BUTTON,
 	CB_RADIO_WIFI,
 	CB_RADIO_BTH,
@@ -56,11 +56,12 @@ typedef struct _Settings {
 class JpgDecContext;
 
 
-typedef struct _Buffer {
-	unsigned char *data;
-	size_t buf_size;
-	size_t data_length;
-} Buffer;
+class Buffer {
+public:
+	unsigned char *data = nullptr;
+	size_t buf_size = 0;
+	size_t data_length = 0;
+};
 
 #define JPG_BACKBUF_MAX 10
 
@@ -83,7 +84,7 @@ typedef struct _DCContext {
 	GtkWidget *mode_ipcam;
 	GtkWidget *mode_droidcam;
 	gboolean running;
-	Decoder * decoder;
+	Decoder *decoder;
 	CallbackContext callbackData[20];
 } DCContext;
 

@@ -187,7 +187,7 @@ static void updateSettingsFromContext(DCContext *context) {
 
 	if (settings->hostName == NULL ||
 	    strcmp(host, settings->hostName)!=0) {
-		if(settings->hostName!=NULL) { free(settings->hostName); }
+		if(settings->hostName!=NULL) { FREE_OBJECT(settings->hostName, free); }
 		settings->hostName = strdup(host);
 	}
 }
