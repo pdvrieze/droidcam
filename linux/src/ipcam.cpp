@@ -93,7 +93,7 @@ static gboolean readIntoBuffer(ReadBuffer *b, const char *data, size_t size)
 	}
 	memcpy(b->buffer + b->recvCount, data, size);
 	b->recvCount += size;
-	return TRUE;
+	return true;
 }
 
 static gboolean readIntoBuffer_Old(ReadBuffer *b, CurlContext *curlContext, size_t minRecv)
@@ -108,7 +108,7 @@ static gboolean readIntoBuffer_Old(ReadBuffer *b, CurlContext *curlContext, size
 
 			if (retval == -1) {
 				MSG_ERROR("select");
-				return FALSE;
+				return false;
 			}
 
 			if (retval && curlContext->dcContext->running) {
@@ -120,7 +120,7 @@ static gboolean readIntoBuffer_Old(ReadBuffer *b, CurlContext *curlContext, size
 			b->recvCount += recvCount;
 		}
 	}
-	return TRUE;
+	return true;
 }
 
 static gboolean consumeLine(CurlContext *curlContext, char *line, size_t maxLine)
@@ -134,9 +134,9 @@ static gboolean consumeLine(CurlContext *curlContext, char *line, size_t maxLine
 		strncpy(line, (char *) b->buffer + b->offset, n);
 		line[n - b->offset] = 0; // ensure terminating 0
 		b->offset = cur - b->buffer + 2; // add 2 to skip CR/LF
-		return TRUE; // skip CRLF
+		return true; // skip CRLF
 	} else {
-		return FALSE; // no move
+		return false; // no move
 	}
 }
 
@@ -172,18 +172,18 @@ static gboolean consumeBoundary(CurlContext *curlContext)
 		++current;
 	}
 	if (current == lastAvail) {
-		return FALSE; // We need to read more, not an error
+		return false; // We need to read more, not an error
 	}
 	if (offset >= maxOffset) {
 		b->offset += offset;
 		if (b->buffer[b->offset] == CR) ++(b->offset);
 		if (b->buffer[b->offset] == LF) ++(b->offset);
 		curlContext->state = ST_HEADERS;
-		return TRUE;
+		return true;
 	} else {
 		dbgprint("Could not consume boundary\n");
 		curlContext->state = ST_ERROR;
-		return FALSE;
+		return false;
 	}
 }
 
@@ -198,12 +198,12 @@ static gboolean consumeSubHeader(CurlContext *curlContext)
 			if (endPtr == line) {
 				dbgprint("Could not consume the per frame headers\n");
 				curlContext->state = ST_ERROR;
-				return FALSE;
+				return false;
 			}
 		}
 	}
 	if (line[0] != 0) { // We didn't read the entire header yet
-		return FALSE;
+		return false;
 	}
 	if (contentLength==0) {
 		// skip until next boundary
@@ -219,14 +219,14 @@ static gboolean consumeSubHeader(CurlContext *curlContext)
 		if (resultPtr->data == NULL) {
 			dbgprint("Error reallocating memory from %lu to %lu bytes\n", resultPtr->buf_size, contentLength);
 			curlContext->state = ST_ERROR;
-			return FALSE;
+			return false;
 		}
 		resultPtr->buf_size = contentLength;
 	}
 	resultPtr->data_length = contentLength;
 
 	curlContext->state = ST_IMG;
-	return TRUE;
+	return true;
 }
 
 bool readBoundary(CurlContext *curlContext)
@@ -236,7 +236,7 @@ bool readBoundary(CurlContext *curlContext)
 	if (res != CURLE_OK) { return 0; }
 	if (!startsWith(contentType, "multipart/x-mixed-replace;")) {
 		MSG_ERROR("Unexpected content type in ipcam");
-		return FALSE;
+		return false;
 	}
 
 	char *start = strstr(contentType, "boundary");
@@ -276,15 +276,15 @@ gboolean consumeFrame(CurlContext *curlContext)
 	}
 
 	if (curlContext->dcContext->decoder->jpg_frames[0].data == nullptr) { // Not initialized
-		if (curlContext->dcContext->decoder->prepareVideoFromFrame(resultPtr) == FALSE) {
+		if (curlContext->dcContext->decoder->prepareVideoFromFrame(resultPtr) == false) {
 			dbgprint("Could not prepare video from frame\n");
 			curlContext->state = ST_ERROR;
-			return FALSE;
+			return false;
 		}
 	}
 
 	curlContext->state = ST_BOUNDARY; // now look for boundary again
-	return TRUE;
+	return true;
 }
 
 void sendFrame(CurlContext *curlContext)
@@ -319,7 +319,7 @@ size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)
 
 	readIntoBuffer(b, ptr, nmemb);
 
-	gboolean continueLoop = TRUE;
+	gboolean continueLoop = true;
 	while (continueLoop &&
 	       b->offset < b->recvCount &&
 	       curlContext->state != ST_ERROR &&
@@ -340,7 +340,7 @@ size_t processData(char *ptr, size_t size, size_t nmemb, void *userdata)
 					sendFrame(curlContext);
 					g_assert(curlContext->state == ST_BOUNDARY);
 				} else {
-					continueLoop = FALSE; // no full image
+					continueLoop = false; // no full image
 				}
 				break;
 			default:

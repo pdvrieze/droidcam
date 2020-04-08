@@ -35,7 +35,7 @@ Jpeg::~Jpeg()
 Dimension Jpeg::frameDimensions(const Buffer &frame)
 {
 	jpeg_mem_src(&cinfo, frame.data, frame.data_length);
-	jpeg_read_header(&cinfo, TRUE);
+	jpeg_read_header(&cinfo, 1);
 	jpeg_abort_decompress(&cinfo);
 
 	return Dimension{cinfo.image_width, cinfo.image_height};
@@ -74,11 +74,11 @@ bool Jpeg::decodeFrame(UncompressedFrame &out, const Buffer &in)
 
 
 	jpeg_mem_src(dinfo, p, len);
-	jpeg_read_header(dinfo, TRUE);
+	jpeg_read_header(dinfo, true);
 	if (fatal_error) return false;
 
-	dinfo->raw_data_out = TRUE;
-	dinfo->do_fancy_upsampling = FALSE;
+	dinfo->raw_data_out = 1;
+	dinfo->do_fancy_upsampling = false;
 	dinfo->dct_method = JDCT_FASTEST;
 	dinfo->out_color_space = JCS_YCbCr;
 

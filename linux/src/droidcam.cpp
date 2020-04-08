@@ -161,7 +161,7 @@ static void loadSettings(DCContext *context)
 	}
 
 	if(context->settings.inputMode==IM_IPCAM) {
-		gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(context->mode_ipcam),TRUE);
+		gtk_toggle_button_set_state(GTK_TOGGLE_BUTTON(context->mode_ipcam), (!(0)));
 	}
 
 	gtk_entry_set_text(GTK_ENTRY(context->ipEntry), context->settings.hostName);
@@ -273,7 +273,7 @@ void *DroidcamVideoThreadProc(void *args)
 		goto early_out;
 	}
 
-	if (decoder->prepareVideo(buf) == FALSE) {
+	if (decoder->prepareVideo(buf) == false) {
 		goto early_out;
 	}
 
@@ -285,16 +285,16 @@ void *DroidcamVideoThreadProc(void *args)
 		}
 
 		Buffer *f = decoder->getNextFrame();
-		if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
+		if (recvFromSocket(buf, 4, videoSocket) == false) break;
 		unsigned int frameLen = make_int4(buf[0], buf[1], buf[2], buf[3]);
 		f->data_length = frameLen;
 		char *p = (char *) f->data;
 		while (frameLen > 4096) {
-			if (recvFromSocket(p, 4096, videoSocket) == FALSE) goto early_out;
+			if (recvFromSocket(p, 4096, videoSocket) == false) goto early_out;
 			frameLen -= 4096;
 			p += 4096;
 		}
-		if (recvFromSocket(p, frameLen, videoSocket) == FALSE) break;
+		if (recvFromSocket(p, frameLen, videoSocket) == false) break;
 	}
 
 	early_out:
@@ -338,7 +338,7 @@ static gint button_press_event(GtkWidget *widget, GdkEvent *event){
 						bevent->button, bevent->time);
 		return TRUE;
 	}
-	return FALSE;
+	return false;
 }
 */
 static gboolean
@@ -354,7 +354,7 @@ accel_callback(GtkAccelGroup *group,
 		thread_cmd = static_cast<Callback>(reinterpret_cast<size_t>(user_data));
 	}
 */
-	return TRUE;
+	return (!(0));
 }
 
 static void doConnect(DCContext *context)
@@ -406,10 +406,10 @@ static void doConnect(DCContext *context)
 
 
 	gtk_button_set_label(GTK_BUTTON(context->button), "Stop");
-	//gtk_widget_set_sensitive(GTK_WIDGET(settings->button), FALSE);
+	//gtk_widget_set_sensitive(GTK_WIDGET(settings->button), false);
 
-	gtk_widget_set_sensitive(GTK_WIDGET(context->ipEntry), FALSE);
-	gtk_widget_set_sensitive(GTK_WIDGET(context->portEntry), FALSE);
+	gtk_widget_set_sensitive(GTK_WIDGET(context->ipEntry), false);
+	gtk_widget_set_sensitive(GTK_WIDGET(context->portEntry), false);
 #else
 	context->decoder->showTestImage();
 #endif
@@ -424,8 +424,8 @@ static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 {
 	Callback cb = callbackContext->cb;
 	DCContext *context = callbackContext->context;
-	gboolean ipEdit = TRUE;
-	gboolean portEdit = TRUE;
+	gboolean ipEdit = true;
+	gboolean portEdit = true;
 	char *text = NULL;
 
 	_up:
@@ -449,7 +449,7 @@ static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 			context->settings.connection = CB_RADIO_WIFI;
 			if (wifi_srvr_mode) {
 				text = "Prepare";
-				ipEdit = FALSE;
+				ipEdit = false;
 			} else {
 				text = "Connect";
 			}
@@ -457,13 +457,13 @@ static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 		case CB_RADIO_BTH:
 			context->settings.connection = CB_RADIO_BTH;
 			text = "Prepare";
-			ipEdit = FALSE;
-			portEdit = FALSE;
+			ipEdit = false;
+			portEdit = false;
 			break;
 		case CB_RADIO_ADB:
 			context->settings.connection = CB_RADIO_ADB;
 			text = "Connect";
-			ipEdit = FALSE;
+			ipEdit = false;
 			break;
 		case CB_BTN_OTR:
 			gtk_menu_popup(GTK_MENU(menu), NULL, NULL, NULL, NULL, 0, 0);
@@ -499,13 +499,13 @@ static void the_callback(GtkWidget *widget, CallbackContext *callbackContext)
 	}
 
 	if(context->settings.inputMode == IM_DROIDCAM) {
-		gtk_widget_set_sensitive(context->radioServer, TRUE);
+		gtk_widget_set_sensitive(context->radioServer, true);
 	} else {
 		if (gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(context->radioServer))) {
-			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context->radioServer), FALSE);
-			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context->radioClient), TRUE);
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context->radioServer), false);
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context->radioClient), (!(0)));
 		}
-		gtk_widget_set_sensitive(context->radioServer, FALSE);
+		gtk_widget_set_sensitive(context->radioServer, false);
 	}
 
 	if (text != NULL && context->running == 0) {
@@ -528,7 +528,7 @@ int main(int argc, char *argv[])
 	DCContext context = {
 		.settings = {},
 		.button=NULL,
-		.running=FALSE,
+		.running=false,
 		.decoder = &decoder
 	};
 
@@ -549,11 +549,11 @@ int main(int argc, char *argv[])
 		window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
 		gtk_window_set_title(GTK_WINDOW(window), "DroidCam Client");
 		gtk_container_set_border_width(GTK_CONTAINER(window), 1);
-		gtk_window_set_resizable(GTK_WINDOW(window), FALSE);
+		gtk_window_set_resizable(GTK_WINDOW(window), false);
 		gtk_window_set_position(GTK_WINDOW(window), GTK_WIN_POS_NONE);
 		gtk_container_set_border_width(GTK_CONTAINER(window), 10);
 //	gtk_widget_set_size_request(window, 250, 120);
-		gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_inline(-1, icon_inline, FALSE, NULL));
+		gtk_window_set_icon(GTK_WINDOW(window), gdk_pixbuf_new_from_inline(-1, icon_inline, false, NULL));
 
 		{
 			GtkAccelGroup *gtk_accel = gtk_accel_group_new();
@@ -608,117 +608,117 @@ int main(int argc, char *argv[])
 			g_signal_connect(widget, "activate", G_CALLBACK(the_callback), cbContext(&context, CB_CONTROL_ZOUT));
 		}
 
-		vbox2 = gtk_vbox_new(FALSE, 1);
-		hbox = gtk_hbox_new(FALSE, 50);
+		vbox2 = gtk_vbox_new(false, 1);
+		hbox = gtk_hbox_new(false, 50);
 		gtk_container_add(GTK_CONTAINER(window), vbox2);
 
 		// Toggle buttons
-		vbox = gtk_vbox_new(FALSE, 1);
+		vbox = gtk_vbox_new(false, 1);
 
 		{
-			hbox3 = gtk_hbox_new(TRUE, 1);
+			hbox3 = gtk_hbox_new(true, 1);
 			context.mode_ipcam = gtk_radio_button_new_with_label(NULL, "IPCam mode");
-			gtk_box_pack_start(GTK_BOX(hbox3), context.mode_ipcam, FALSE, FALSE, 8);
+			gtk_box_pack_start(GTK_BOX(hbox3), context.mode_ipcam, false, false, 8);
 
 			context.mode_droidcam = gtk_radio_button_new_with_label(gtk_radio_button_get_group(GTK_RADIO_BUTTON(context.mode_ipcam)),
 			                                                "Droidcam mode");
-			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context.mode_droidcam), TRUE);
+			gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context.mode_droidcam), true);
 
-			gtk_box_pack_start(GTK_BOX(hbox3), context.mode_droidcam, FALSE, FALSE, 8);
+			gtk_box_pack_start(GTK_BOX(hbox3), context.mode_droidcam, false, false, 8);
 
 
 			g_signal_connect(context.mode_ipcam, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_MODE_IPCAM));
 			g_signal_connect(context.mode_droidcam, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_MODE_DROIDCAM));
 
-			gtk_box_pack_start(GTK_BOX(vbox2), hbox3, FALSE, FALSE, 8);
+			gtk_box_pack_start(GTK_BOX(vbox2), hbox3, false, false, 8);
 		}
 
 		context.radioClient = gtk_radio_button_new_with_label(NULL, "WiFi / LAN");
-		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context.radioClient), TRUE);
+		gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(context.radioClient), (!(0)));
 		g_signal_connect(context.radioClient, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_RADIO_WIFI));
-		gtk_box_pack_start(GTK_BOX(vbox), context.radioClient, FALSE, FALSE, 0);
+		gtk_box_pack_start(GTK_BOX(vbox), context.radioClient, false, false, 0);
 
 		context.radioServer = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(context.radioClient)), "Wifi Server Mode");
 		g_signal_connect(context.radioServer, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_WIFI_SRVR));
-		gtk_box_pack_start(GTK_BOX(vbox), context.radioServer, FALSE, FALSE, 0);
+		gtk_box_pack_start(GTK_BOX(vbox), context.radioServer, false, false, 0);
 
 		// widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(widget)), "Bluetooth");
 		// g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_RADIO_BTH);
-//		gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+//		gtk_box_pack_start(GTK_BOX(vbox), widget, false, false, 0);
 
 		{
 			GtkWidget *widget = gtk_radio_button_new_with_label(gtk_radio_button_group(GTK_RADIO_BUTTON(context.radioServer)), "USB (over adb)");
 			g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), cbContext(&context, CB_RADIO_ADB));
-			gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+			gtk_box_pack_start(GTK_BOX(vbox), widget, false, false, 0);
 		}
 
 		/* TODO: Figure out audio
 		widget = gtk_check_button_new_with_label("Enable Audio");
 		g_signal_connect(widget, "toggled", G_CALLBACK(the_callback), (gpointer)CB_AUDIO);
-		gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 5);
+		gtk_box_pack_start(GTK_BOX(vbox), widget, false, false, 5);
 		*/
 
-		hbox2 = gtk_hbox_new(FALSE, 1);
+		hbox2 = gtk_hbox_new(false, 1);
 		{
 			GtkWidget *widget = gtk_button_new_with_label("...");
 			gtk_widget_set_size_request(widget, 40, 28);
 			g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), cbContext(&context, CB_BTN_OTR));
-			gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
+			gtk_box_pack_start(GTK_BOX(hbox2), widget, false, false, 0);
 		}
-		gtk_box_pack_start(GTK_BOX(vbox), hbox2, FALSE, FALSE, 0);
+		gtk_box_pack_start(GTK_BOX(vbox), hbox2, false, false, 0);
 
-		gtk_box_pack_start(GTK_BOX(hbox), vbox, FALSE, FALSE, 0);
+		gtk_box_pack_start(GTK_BOX(hbox), vbox, false, false, 0);
 
 		// IP/Port/Button
 
-		vbox = gtk_vbox_new(FALSE, 5);
+		vbox = gtk_vbox_new(false, 5);
 
-		hbox2 = gtk_hbox_new(FALSE, 1);
-		gtk_box_pack_start(GTK_BOX(hbox2), gtk_label_new("Phone IP:"), FALSE, FALSE, 0);
+		hbox2 = gtk_hbox_new(false, 1);
+		gtk_box_pack_start(GTK_BOX(hbox2), gtk_label_new("Phone IP:"), false, false, 0);
 		{
 			context.ipEntry = gtk_entry_new_with_max_length(16);
 			gtk_widget_set_size_request(context.ipEntry, 120, 30);
-			gtk_box_pack_start(GTK_BOX(hbox2), context.ipEntry, FALSE, FALSE, 0);
+			gtk_box_pack_start(GTK_BOX(hbox2), context.ipEntry, false, false, 0);
 		}
 
 		{
 			GtkWidget *widget = gtk_alignment_new(0, 0, 0, 0);
 			gtk_container_add(GTK_CONTAINER(widget), hbox2);
-			gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+			gtk_box_pack_start(GTK_BOX(vbox), widget, false, false, 0);
 		}
 
-		hbox2 = gtk_hbox_new(FALSE, 1);
-		gtk_box_pack_start(GTK_BOX(hbox2), gtk_label_new("DroidCam Port:"), FALSE, FALSE, 0);
+		hbox2 = gtk_hbox_new(false, 1);
+		gtk_box_pack_start(GTK_BOX(hbox2), gtk_label_new("DroidCam Port:"), false, false, 0);
 		{
 			context.portEntry = gtk_entry_new_with_max_length(5);
 			gtk_widget_set_size_request(context.portEntry, 60, 30);
-			gtk_box_pack_start(GTK_BOX(hbox2), context.portEntry, FALSE, FALSE, 0);
+			gtk_box_pack_start(GTK_BOX(hbox2), context.portEntry, false, false, 0);
 		}
 
 		{
 			GtkWidget *widget = gtk_alignment_new(0, 0, 0, 0);
 			gtk_container_add(GTK_CONTAINER(widget), hbox2);
-			gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 0);
+			gtk_box_pack_start(GTK_BOX(vbox), widget, false, false, 0);
 		}
 
-		hbox2 = gtk_hbox_new(FALSE, 1);
+		hbox2 = gtk_hbox_new(false, 1);
 		{
 			GtkWidget *widget = gtk_button_new_with_label("Connect");
 			gtk_widget_set_size_request(widget, 80, 30);
 			g_signal_connect(widget, "clicked", G_CALLBACK(the_callback), cbContext(&context, CB_BUTTON));
-			gtk_box_pack_start(GTK_BOX(hbox2), widget, FALSE, FALSE, 0);
+			gtk_box_pack_start(GTK_BOX(hbox2), widget, false, false, 0);
 			context.button = widget;
 		}
 
 		{
 			GtkWidget *widget = gtk_alignment_new(1, 0, 0, 0);
 			gtk_container_add(GTK_CONTAINER(widget), hbox2);
-			gtk_box_pack_start(GTK_BOX(vbox), widget, FALSE, FALSE, 10);
+			gtk_box_pack_start(GTK_BOX(vbox), widget, false, false, 10);
 		}
 
-		gtk_box_pack_start(GTK_BOX(hbox), vbox, FALSE, FALSE, 0);
+		gtk_box_pack_start(GTK_BOX(hbox), vbox, false, false, 0);
 
-		gtk_box_pack_start(GTK_BOX(vbox2), hbox, FALSE, FALSE, 0);
+		gtk_box_pack_start(GTK_BOX(vbox2), hbox, false, false, 0);
 
 		loadSettings(&context); // Load here after we have controls to put text into
 

@@ -63,22 +63,22 @@ server_wait:
         goto early_out;
     }
 
-    if (context->decoder->prepareVideo(buf) == FALSE) {
+    if (context->decoder->prepareVideo(buf) == false) {
         goto early_out;
     }
 
     while (1){
         Buffer *f = context->decoder->getNextFrame();
-        if (recvFromSocket(buf, 4, videoSocket) == FALSE) break;
+        if (recvFromSocket(buf, 4, videoSocket) == false) break;
         unsigned int frameLen = make_int4(buf[0], buf[1], buf[2], buf[3]);
         f->data_length = frameLen;
         char *p = (char*)f->data;
         while (frameLen > 4096) {
-            if (recvFromSocket(p, 4096, videoSocket) == FALSE) goto early_out;
+            if (recvFromSocket(p, 4096, videoSocket) == false) goto early_out;
             frameLen -= 4096;
             p += 4096;
         }
-        if (recvFromSocket(p, frameLen, videoSocket) == FALSE) break;
+        if (recvFromSocket(p, frameLen, videoSocket) == false) break;
     }
 
 early_out:

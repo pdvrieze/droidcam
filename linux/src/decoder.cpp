@@ -120,7 +120,7 @@ Decoder::~Decoder()
 
 	if (jpg_decoder->init) {
 		jpeg_destroy_decompress(&jpg_decoder->dinfo);
-		jpg_decoder->init = FALSE;
+		jpg_decoder->init = false;
 	}
 };
 
@@ -186,7 +186,7 @@ OutputMode Decoder::findOutputDevice()
 		}
 		close(_deviceFd);
 	}
-	fprintf(stderr,"Device not found (/dev/video[0-9]).\nDid you install it?\n");
+	fprintf(stderr, "Device not found (/dev/video[0-9]).\nDid you install it?\n");
 	return OutputMode::OM_MISSING;
 }
 
@@ -297,7 +297,7 @@ bool Decoder::init()
 	jpeg_create_decompress(&jpg_decoder->dinfo);
 
 	if (fatal_error) return false;
-	jpg_decoder->init = TRUE;
+	jpg_decoder->init = 1;
 	jpg_decoder->subsamp = TJSAMP_NIL;
 	jpg_decoder->m_webcamYuvSize = loopbackWidth() * loopbackHeight() * 3 / 2;
 	jpg_decoder->m_webcam_ySize = loopbackWidth() * loopbackHeight();
@@ -321,7 +321,7 @@ bool Decoder::prepareVideoFromFrame(Buffer *data)
 	auto &dec = *jpg_decoder;
 	struct jpeg_decompress_struct *dinfo = &(dec.dinfo);
 	jpeg_mem_src(dinfo, data->data, data->data_length);
-	jpeg_read_header(dinfo, TRUE);
+	jpeg_read_header(dinfo, 1);
 	jpeg_abort_decompress(dinfo);
 	return prepareVideo(dinfo->image_width, dinfo->image_height);
 }
@@ -440,10 +440,10 @@ static void decode_next_frame(Decoder *jpgCtx)
 	JSAMPLE *ptr = jpgCtx->jpg_decoder->m_decodeBuf;
 
 	jpeg_mem_src(dinfo, p, len);
-	jpeg_read_header(dinfo, TRUE);
+	jpeg_read_header(dinfo, true);
 	if (fatal_error) return;
-	dinfo->raw_data_out = TRUE;
-	dinfo->do_fancy_upsampling = FALSE;
+	dinfo->raw_data_out = 1;
+	dinfo->do_fancy_upsampling = false;
 	dinfo->dct_method = JDCT_FASTEST;
 	dinfo->out_color_space = JCS_YCbCr;
 

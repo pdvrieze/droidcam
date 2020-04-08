@@ -10,6 +10,7 @@
 #ifndef _COMMON_H_
 #define _COMMON_H_
 
+#include "config.h"
 
 extern void ShowError(const char *title, const char *msg);
 
@@ -25,49 +26,32 @@ extern void ShowError(const char *title, const char *msg);
 class Dimension {
 public:
 	Dimension() = default;
-	Dimension(unsigned int w, unsigned int h): width(w), height(h){};
-	Dimension(const Dimension& d) = default;;
 
-    unsigned int width;
-    unsigned int height;
+	Dimension(unsigned int w, unsigned int h) : width(w), height(h)
+	{};
+
+	Dimension(const Dimension &d) = default;;
+
+	unsigned int width;
+	unsigned int height;
 };
 
 inline unsigned int make_int(unsigned char b1, unsigned char b2)
 {
-    unsigned int r;
-    r = 0u;
-    r |= (b1 & 0xFFu);
-    r <<= 8u;
-    r |= (b2 & 0xFFu);
-    return r;
+	return (b1 & 0xFFu) << 8u | (b2 & 0xFFu);
 }
 
 inline unsigned int make_int4(unsigned char b0, unsigned char b1, unsigned char b2, unsigned char b3)
 {
-    unsigned int r = 0u;
-    r |= (b3 & 0xFFu);
-    r <<= 8u;
-    r |= (b2 & 0xFFu);
-    r <<= 8u;
-    r |= (b1 & 0xFFu);
-    r <<= 8u;
-    r |= (b0 & 0xFFu);
-    return r;
+	return ((b3 & 0xFFu) << 24u) | ((b2 & 0xFFu) << 16u) | ((b1 & 0xFFu) << 8u) | (b0 & 0xFFu);
 }
 
 #define errprint(...) fprintf(stderr, __VA_ARGS__)
 #define voidprint(...) /* */
-#define dbgprint      errprint
-
-#define VIDEO_INBUF_SZ 4096
-#define AUDIO_INBUF_SZ 32
-
-#ifndef FALSE
-# define FALSE 0
-#endif
-
-#ifndef TRUE
-# define TRUE  1
+#ifndef NDEBUG
+#define dbgprint errprint
+#else
+#define dbgprint voidprint
 #endif
 
 #endif
