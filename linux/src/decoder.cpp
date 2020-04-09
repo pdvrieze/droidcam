@@ -590,7 +590,6 @@ void Decoder::putNextFrame(Buffer &frame)
 	swap(jpg_frames[nextFrameToStore], frame);
 
 	nextFrameToStore = (nextFrameToStore + 1) % JPG_BACKBUF_MAX;
-	return
 
 }
 

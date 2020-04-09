@@ -63,7 +63,7 @@ public:
 	size_t data_length = 0;
 };
 
-void swap(Buffer &a, Buffer &b) noexcept
+static void swap(Buffer &a, Buffer &b) noexcept
 {
 	std::swap(a.data, b.data);
 	std::swap(a.buf_size, b.buf_size);

@@ -69,11 +69,11 @@ private:
 	unsigned int bufferedFramesMax() { return _bufferedFramesMax; }
 	unsigned int bufferedFramesCnt() { return _bufferedFramesCnt; }
 
-	unsigned int _bufferedFramesMax;
-	unsigned int _bufferedFramesCnt=0;
-	unsigned int _loopbackWidth;
-	unsigned int _loopbackHeight;
-	Transform _transform = Transform::DEG0;
+	unsigned int _bufferedFramesMax{0};
+	unsigned int _bufferedFramesCnt{0};
+	unsigned int _loopbackWidth{0};
+	unsigned int _loopbackHeight{0};
+	Transform _transform{Transform::DEG0};
 	float scale_matrix[9];
 	float angle_matrix[9];
 

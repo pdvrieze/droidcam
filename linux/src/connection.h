@@ -9,7 +9,10 @@
 #ifndef __CONN_H__
 #define __CONN_H__
 
+#include <sys/types.h>
+
 #define INVALID_SOCKET -1
+
 typedef int SOCKET;
 
 SOCKET connect_droidcam(char * ip, unsigned int port);
